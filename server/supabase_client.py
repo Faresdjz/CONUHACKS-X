@@ -67,13 +67,15 @@ def get_inquiry(inquiry_id: str):
     return supabase.table("inquiries").select("*").eq("id", inquiry_id).single().execute()
 
 
-def get_inquiries(limit: int = 100, offset: int = 0, status: Optional[str] = None, user_id: Optional[str] = None):
+def get_inquiries(limit: int = 100, offset: int = 0, status: Optional[str] = None, user_id: Optional[str] = None, collection_id: Optional[str] = None):
     """Get all inquiries with optional filtering."""
     query = supabase.table("inquiries").select("*")
     if status:
         query = query.eq("status", status)
     if user_id:
         query = query.eq("user_id", user_id)
+    if collection_id:
+        query = query.eq("collection_id", collection_id)
     return query.range(offset, offset + limit - 1).order("created_at", desc=True).execute()
 
 
@@ -122,6 +124,11 @@ def get_match(match_id: str):
     return supabase.table("matches").select("*, inquiries(*), items(*)").eq("id", match_id).single().execute()
 
 
+def delete_matches_for_inquiry(inquiry_id: str):
+    """Delete all existing matches for an inquiry."""
+    return supabase.table("matches").delete().eq("inquiry_id", inquiry_id).execute()
+
+
 # ============== Collections Operations ==============
 
 def create_collection(name: str):
@@ -167,3 +174,35 @@ def get_collection_by_name(name: str):
     """Get a collection by name (case-insensitive)."""
     # Using ilike for case-insensitive matching
     return supabase.table("collections").select("*").ilike("name", name).limit(1).execute()
+
+
+# ============== Follow-Up Questions Operations ==============
+
+def create_follow_up_questions(inquiry_id: str, questions: list[str]):
+    """Create follow-up questions for an inquiry (bulk insert)."""
+    data = [
+        {
+            "inquiry_id": inquiry_id,
+            "question": q,
+            "question_type": "text"
+        }
+        for q in questions
+    ]
+    return supabase.table("follow_up_questions").insert(data).execute()
+
+
+def get_follow_up_questions(inquiry_id: str):
+    """Get all follow-up questions for an inquiry."""
+    return supabase.table("follow_up_questions").select("*").eq("inquiry_id", inquiry_id).order("created_at", desc=False).execute()
+
+
+def get_follow_up_question(question_id: str):
+    """Get a single follow-up question by ID."""
+    return supabase.table("follow_up_questions").select("*").eq("id", question_id).single().execute()
+
+
+def update_follow_up_response(question_id: str, response: str):
+    """Update a follow-up question with the user's response."""
+    return supabase.table("follow_up_questions").update({
+        "response": response
+    }).eq("id", question_id).execute()

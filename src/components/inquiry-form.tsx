@@ -13,12 +13,13 @@ import {
   FieldLabel,
   FieldDescription,
 } from "@/components/ui/field"
-import { createInquiry } from "@/lib/api" 
+import { createInquiry, getCollectionByName } from "@/lib/api" 
 
 export function InquiryForm() {
   const [step, setStep] = React.useState(1)
   const [collectionName, setCollectionName] = React.useState("")
   const [nameError, setNameError] = React.useState("")
+  const [validatingName, setValidatingName] = React.useState(false)
   
   const [description, setDescription] = React.useState("")
   const [selectedImage, setSelectedImage] = React.useState<File | null>(null)
@@ -29,15 +30,31 @@ export function InquiryForm() {
   
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
-  const handleNameSubmit = (e: React.FormEvent) => {
+  const handleNameSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!collectionName.trim()) {
       setNameError("Please enter a collection name")
       return
     }
     
+    setValidatingName(true)
     setNameError("")
-    setStep(2)
+    
+    try {
+      const collection = await getCollectionByName(collectionName.trim())
+      
+      if (!collection) {
+        setNameError("Collection not found. Please check the name and try again.")
+        return
+      }
+      
+      setStep(2)
+    } catch (error) {
+      console.error("Failed to validate collection:", error)
+      setNameError("Failed to validate collection. Please try again.")
+    } finally {
+      setValidatingName(false)
+    }
   }
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,7 +91,7 @@ export function InquiryForm() {
       // Prepend the collection name to the description
       // const fullDescription = `Collection Name: ${collectionName}\n\n${description}`
       
-      await createInquiry(description, selectedImage || undefined, collectionName)
+      await createInquiry(description, selectedImage || undefined, collectionName.trim())
       setIsSuccess(true)
     } catch (error) {
       console.error("Failed to submit inquiry:", error)
@@ -87,6 +104,8 @@ export function InquiryForm() {
   const handleReset = () => {
     setStep(1)
     setCollectionName("")
+    setNameError("")
+    setValidatingName(false)
     setDescription("")
     handleRemoveImage()
     setIsSuccess(false)
@@ -152,8 +171,17 @@ export function InquiryForm() {
                   )}
                 </Field>
                 
-                <Button type="submit" className="w-full">
-                  Next <ArrowRight className="w-4 h-4" />
+                <Button type="submit" className="w-full" disabled={validatingName}>
+                  {validatingName ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Validating...
+                    </>
+                  ) : (
+                    <>
+                      Next <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </Button>
               </FieldGroup>
             </form>

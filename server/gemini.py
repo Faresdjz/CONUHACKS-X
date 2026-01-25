@@ -4,7 +4,7 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-from models import CaptionResponse, OCRResponse, VerificationQuestionsOutput
+from models import CaptionResponse, OCRResponse, VerificationQuestionsOutput, FollowUpQuestionsOutput
 
 load_dotenv()
 
@@ -88,4 +88,52 @@ def generate_verification_questions(caption: str, extracted_text: str, skip_on_e
     except Exception:
         if skip_on_error:
             return DEFAULT_QUESTIONS
+        raise
+
+
+DEFAULT_FOLLOWUP_QUESTIONS = [
+    "Can you describe any unique markings, scratches, or wear on the item?",
+    "What was the approximate location where you last had the item?",
+    "Are there any stickers, engravings, or personal modifications on it?",
+    "What color is the item, including any secondary colors?",
+    "Can you describe what was inside or attached to the item?"
+]
+
+
+def generate_follow_up_questions(description: str | None, image_url: str | None, skip_on_error: bool = True) -> list[str]:
+    """Generate follow-up questions based on the inquiry description and/or image."""
+    if not description and not image_url:
+        return DEFAULT_FOLLOWUP_QUESTIONS
+    
+    description = description if description else "No description provided"
+    
+    try:
+        contents = [
+            f"""
+            A user has submitted a lost item inquiry with the following description:
+            "{description}"
+            
+            Generate 3-5 follow-up questions to help identify and verify the item.
+            Questions should:
+            - Ask for specific details that would help identify the exact item
+            - Be clear and easy to answer
+            - Focus on: brand, size, distinguishing marks, contents, accessories, location details
+            - NOT ask for information already provided in the description
+            """
+        ]
+        
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=FollowUpQuestionsOutput,
+            ),
+        )
+        result = FollowUpQuestionsOutput.model_validate_json(response.text)
+        return result.questions[:5] if result.questions else DEFAULT_FOLLOWUP_QUESTIONS
+    except Exception as e:
+        if skip_on_error:
+            print(f"[Follow-up generation error: {str(e)[:50]}]")
+            return DEFAULT_FOLLOWUP_QUESTIONS
         raise

@@ -78,8 +78,8 @@ export default function CollectionDetailsPage({ params }: { params: Promise<{ id
       .catch((err) => console.error("Failed to fetch items:", err))
       .finally(() => setIsLoadingItems(false));
 
-    // Fetch all inquiries (not filtered by collection for now)
-    getAllInquiries()
+    // Fetch inquiries for this collection
+    getAllInquiries(undefined, id)
       .then((data) => setInquiries(data.inquiries))
       .catch((err) => console.error("Failed to fetch inquiries:", err))
       .finally(() => setIsLoadingInquiries(false));

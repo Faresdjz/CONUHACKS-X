@@ -14,12 +14,14 @@ from models import (
     SearchResult, SearchResponse,
     VerificationQuestionsResponse,
     SystemStats, CollectionStats, HealthResponse,
-    CollectionResponse, CollectionListResponse, CollectionCreate
+    CollectionResponse, CollectionListResponse, CollectionCreate,
+    FollowUpQuestionResponse, FollowUpQuestionsListResponse, 
+    FollowUpQuestionCreate, FollowUpResponseSubmit, GeneratedQuestionsResponse
 )
 import supabase_client as db
 import milvus
 from embeddings import embed_image_dino, embed_image_clip, embed_text_clip, embed_text
-from gemini import generate_caption, extract_text_from_image, generate_verification_questions
+from gemini import generate_caption, extract_text_from_image, generate_verification_questions, generate_follow_up_questions
 from auth import get_current_user, get_optional_user
 
 app = FastAPI(
@@ -281,10 +283,37 @@ async def list_collections():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/collections/by-name/{name}", response_model=CollectionResponse)
+async def get_collection_by_name(name: str):
+    """Get a collection by name (case-insensitive). Returns 404 if not found."""
+    try:
+        result = db.get_collection_by_name(name)
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Collection not found")
+        c = result.data[0]
+        # Get item count
+        items_result = db.get_items_by_collection(c["id"])
+        return CollectionResponse(
+            id=c["id"],
+            name=c["name"],
+            created_at=c["created_at"],
+            item_count=len(items_result.data) if items_result.data else 0
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/collections", response_model=CollectionResponse)
 async def create_collection(collection: CollectionCreate):
-    """Create a new collection."""
+    """Create a new collection. Name must be unique (case-insensitive)."""
     try:
+        # Check if collection with same name already exists
+        existing = db.get_collection_by_name(collection.name)
+        if existing.data:
+            raise HTTPException(status_code=400, detail="A collection with this name already exists")
+        
         result = db.create_collection(collection.name)
         c = result.data[0]
         return CollectionResponse(
@@ -293,6 +322,8 @@ async def create_collection(collection: CollectionCreate):
             created_at=c["created_at"],
             item_count=0
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -371,13 +402,14 @@ async def create_inquiry(
 
         # Look up collection if provided
         if collection_name:
-            # Try to find existing collection
-            collection_result = db.get_collection_by_name(collection_name)
+            # Try to find existing collection (trim whitespace for safety)
+            collection_name_trimmed = collection_name.strip()
+            collection_result = db.get_collection_by_name(collection_name_trimmed)
             if collection_result.data:
                 collection_id = collection_result.data[0]["id"]
-                print(f"Found collection '{collection_name}' with ID: {collection_id}")
+                print(f"Found collection '{collection_name_trimmed}' with ID: {collection_id}")
             else:
-                print(f"Collection '{collection_name}' not found")
+                print(f"Collection '{collection_name_trimmed}' not found")
         
         # Upload image if provided
         if image:
@@ -500,17 +532,19 @@ async def get_inquiry_matches(inquiry_id: str):
 async def list_all_inquiries(
     limit: int = 100,
     offset: int = 0,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    collection_id: Optional[str] = None
 ):
-    """List all inquiries for admin/assistant review (no user filtering)."""
+    """List all inquiries for admin/assistant review (no user filtering). Optionally filter by collection."""
     try:
-        result = db.get_inquiries(limit=limit, offset=offset, status=status, user_id=None)
+        result = db.get_inquiries(limit=limit, offset=offset, status=status, user_id=None, collection_id=collection_id)
         inquiries = [
             InquiryResponse(
                 id=inq["id"],
                 user_id=inq.get("user_id"),
                 image_url=inq.get("image_url"),
                 description=inq.get("description"),
+                collection_id=inq.get("collection_id"),
                 status=InquiryStatus(inq["status"]),
                 created_at=inq["created_at"],
                 updated_at=inq["updated_at"]
@@ -553,6 +587,7 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
         
         image_url = inquiry.get("image_url")
         description = inquiry.get("description")
+        inquiry_collection_id = inquiry.get("collection_id")
         
         results = {}
         
@@ -586,10 +621,27 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
             results["desc_to_desc"] = milvus.search_sentence_embedding(sentence_txt_emb, top_k=top_k * 2)
         
         # Merge and rank results
-        ranked_results = merge_and_rank(results, SEARCH_WEIGHTS)[:top_k]
+        ranked_results = merge_and_rank(results, SEARCH_WEIGHTS)
+        
+        # Filter results to only include items from the same collection
+        if inquiry_collection_id:
+            filtered_results = []
+            for r in ranked_results:
+                try:
+                    item_result = db.get_item(r["item_id"])
+                    if item_result.data and item_result.data.get("collection_id") == inquiry_collection_id:
+                        filtered_results.append(r)
+                except:
+                    pass
+            ranked_results = filtered_results[:top_k]
+        else:
+            ranked_results = ranked_results[:top_k]
         
         # Update inquiry status
         db.update_inquiry_status(inquiry_id, "under_review")
+        
+        # Clear existing matches for this inquiry before adding new ones
+        db.delete_matches_for_inquiry(inquiry_id)
         
         # Store matches in database
         search_results = []
@@ -748,6 +800,275 @@ async def get_verification_questions(item_id: str):
             questions=questions,
             item_id=item_id
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== Follow-Up Questions ==============
+
+@app.post("/inquiries/{inquiry_id}/generate-questions", response_model=GeneratedQuestionsResponse)
+async def generate_questions_for_inquiry(inquiry_id: str):
+    """Generate AI follow-up questions for an inquiry based on its description."""
+    try:
+        # Get the inquiry
+        inquiry_result = db.get_inquiry(inquiry_id)
+        inquiry = inquiry_result.data
+        
+        # Generate questions using Gemini
+        questions = generate_follow_up_questions(
+            description=inquiry.get("description"),
+            image_url=inquiry.get("image_url")
+        )
+        
+        return GeneratedQuestionsResponse(questions=questions)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/inquiries/{inquiry_id}/follow-up", response_model=FollowUpQuestionsListResponse)
+async def send_follow_up_questions(inquiry_id: str, data: FollowUpQuestionCreate):
+    """Save follow-up questions for an inquiry and update status to follow_up."""
+    try:
+        # Verify inquiry exists
+        inquiry_result = db.get_inquiry(inquiry_id)
+        if not inquiry_result.data:
+            raise HTTPException(status_code=404, detail="Inquiry not found")
+        
+        # Create follow-up questions in database
+        result = db.create_follow_up_questions(inquiry_id, data.questions)
+        
+        # Update inquiry status to follow_up
+        db.update_inquiry_status(inquiry_id, "follow_up")
+        
+        # Return the created questions
+        questions = [
+            FollowUpQuestionResponse(
+                id=q["id"],
+                inquiry_id=q["inquiry_id"],
+                question=q["question"],
+                question_type=q.get("question_type", "text"),
+                options=q.get("options"),
+                response=q.get("response"),
+                created_at=q["created_at"],
+                updated_at=q["updated_at"]
+            )
+            for q in result.data
+        ]
+        
+        return FollowUpQuestionsListResponse(questions=questions, total=len(questions))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/inquiries/{inquiry_id}/follow-up", response_model=FollowUpQuestionsListResponse)
+async def get_follow_up_questions_for_inquiry(inquiry_id: str):
+    """Get all follow-up questions for an inquiry."""
+    try:
+        result = db.get_follow_up_questions(inquiry_id)
+        questions = [
+            FollowUpQuestionResponse(
+                id=q["id"],
+                inquiry_id=q["inquiry_id"],
+                question=q["question"],
+                question_type=q.get("question_type", "text"),
+                options=q.get("options"),
+                response=q.get("response"),
+                created_at=q["created_at"],
+                updated_at=q["updated_at"]
+            )
+            for q in result.data
+        ]
+        return FollowUpQuestionsListResponse(questions=questions, total=len(questions))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/follow-up/{question_id}/respond", response_model=FollowUpQuestionResponse)
+async def submit_follow_up_response(question_id: str, data: FollowUpResponseSubmit):
+    """Submit a response to a follow-up question. Auto-triggers search when all questions are answered."""
+    try:
+        # Update the question with the response
+        result = db.update_follow_up_response(question_id, data.response)
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Question not found")
+        
+        q = result.data[0]
+        inquiry_id = q["inquiry_id"]
+        
+        # Check if all questions for this inquiry are now answered
+        all_questions = db.get_follow_up_questions(inquiry_id)
+        all_answered = all(question.get("response") for question in all_questions.data)
+        
+        # If all answered, automatically trigger search with responses
+        if all_answered and all_questions.data:
+            print(f"All follow-up questions answered for inquiry {inquiry_id}. Auto-triggering search...")
+            # Trigger the search in the background (don't wait for it)
+            try:
+                await search_with_follow_up_responses(inquiry_id)
+                print(f"Auto-search completed for inquiry {inquiry_id}")
+            except Exception as search_error:
+                print(f"Auto-search failed for inquiry {inquiry_id}: {search_error}")
+        
+        return FollowUpQuestionResponse(
+            id=q["id"],
+            inquiry_id=q["inquiry_id"],
+            question=q["question"],
+            question_type=q.get("question_type", "text"),
+            options=q.get("options"),
+            response=q.get("response"),
+            created_at=q["created_at"],
+            updated_at=q["updated_at"]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/inquiries/{inquiry_id}/search-with-responses", response_model=SearchResponse)
+async def search_with_follow_up_responses(inquiry_id: str, top_k: int = 10):
+    """
+    Re-run search for an inquiry using enhanced description from follow-up responses.
+    Combines original description with all answered follow-up questions.
+    """
+    try:
+        # Get inquiry
+        inquiry_result = db.get_inquiry(inquiry_id)
+        inquiry = inquiry_result.data
+        inquiry_collection_id = inquiry.get("collection_id")
+        
+        # Get follow-up questions and responses
+        followup_result = db.get_follow_up_questions(inquiry_id)
+        
+        # Build enhanced description
+        original_description = inquiry.get("description") or ""
+        
+        # Add follow-up Q&A to description
+        followup_text = []
+        for q in followup_result.data:
+            if q.get("response"):  # Only include answered questions
+                followup_text.append(q['response'])
+        
+        if followup_text:
+            enhanced_description = f"{original_description}\n\nAdditional details: " + " ".join(followup_text)
+        else:
+            enhanced_description = original_description
+        
+        print(f"Enhanced description for inquiry {inquiry_id}:\n{enhanced_description}")
+        
+        image_url = inquiry.get("image_url")
+        
+        results = {}
+        
+        # If user provided an image
+        if image_url:
+            img_response = requests.get(image_url)
+            image_bytes = img_response.content
+            pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            
+            dino_emb = embed_image_dino(pil_image)
+            clip_img_emb = embed_image_clip(pil_image)
+            
+            # Image → Image (DINOv2)
+            results["img_to_img"] = milvus.search_dino(dino_emb, top_k=top_k * 2)
+            
+            # Image → Caption (CLIP)
+            results["img_to_caption"] = milvus.search_clip_caption(clip_img_emb, top_k=top_k * 2)
+        
+        # Use enhanced description for text-based searches
+        if enhanced_description:
+            clip_txt_emb = embed_text_clip(enhanced_description)
+            sentence_txt_emb = embed_text(enhanced_description)
+            
+            # Description → Image (CLIP)
+            results["desc_to_img"] = milvus.search_clip_image(clip_txt_emb, top_k=top_k * 2)
+            
+            # Description → Caption (CLIP)
+            results["desc_to_caption"] = milvus.search_clip_caption(clip_txt_emb, top_k=top_k * 2)
+            
+            # Description → Description (Sentence Embeddings)
+            results["desc_to_desc"] = milvus.search_sentence_embedding(sentence_txt_emb, top_k=top_k * 2)
+        
+        # Merge and rank results
+        ranked_results = merge_and_rank(results, SEARCH_WEIGHTS)
+        
+        # Filter results to only include items from the same collection
+        if inquiry_collection_id:
+            filtered_results = []
+            for r in ranked_results:
+                try:
+                    item_result = db.get_item(r["item_id"])
+                    if item_result.data and item_result.data.get("collection_id") == inquiry_collection_id:
+                        filtered_results.append(r)
+                except:
+                    pass
+            ranked_results = filtered_results[:top_k]
+        else:
+            ranked_results = ranked_results[:top_k]
+        
+        # Update inquiry status to matched if we have results
+        if ranked_results:
+            db.update_inquiry_status(inquiry_id, "matched")
+        
+        # Clear existing matches for this inquiry before adding new ones
+        db.delete_matches_for_inquiry(inquiry_id)
+        
+        # Store matches in database
+        search_results = []
+        for r in ranked_results:
+            item_id = r["item_id"]
+            scores = r["scores"]
+            
+            # Create new match record
+            db.create_match(inquiry_id, item_id, {
+                "img_to_img": scores.get("img_to_img"),
+                "img_to_caption": scores.get("img_to_caption"),
+                "desc_to_img": scores.get("desc_to_img"),
+                "desc_to_caption": scores.get("desc_to_caption"),
+                "desc_to_desc": scores.get("desc_to_desc"),
+                "total": r["total"]
+            })
+            
+            # Get item details
+            try:
+                item_result = db.get_item(item_id)
+                item_data = item_result.data
+                item = ItemResponse(
+                    id=item_data["id"],
+                    image_url=item_data["image_url"],
+                    caption=item_data.get("caption"),
+                    extracted_text=item_data.get("extracted_text"),
+                    category=item_data.get("category"),
+                    collection_id=item_data.get("collection_id"),
+                    status=ItemStatus(item_data["status"]),
+                    created_at=item_data["created_at"],
+                    updated_at=item_data["updated_at"]
+                )
+            except:
+                item = None
+            
+            search_results.append(SearchResult(
+                item_id=item_id,
+                scores=MatchScores(
+                    img_to_img=scores.get("img_to_img"),
+                    img_to_caption=scores.get("img_to_caption"),
+                    desc_to_img=scores.get("desc_to_img"),
+                    desc_to_caption=scores.get("desc_to_caption"),
+                    desc_to_desc=scores.get("desc_to_desc"),
+                    total=r["total"]
+                ),
+                item=item
+            ))
+        
+        return SearchResponse(
+            inquiry_id=inquiry_id,
+            results=search_results,
+            total=len(search_results)
+        )
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

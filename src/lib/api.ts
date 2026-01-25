@@ -162,10 +162,13 @@ export async function getInquiries() {
 
 // ============== Admin/Assistant Functions ==============
 
-export async function getAllInquiries(status?: InquiryStatus) {
+export async function getAllInquiries(status?: InquiryStatus, collectionId?: string) {
   const params = new URLSearchParams();
   if (status) {
     params.append("status", status);
+  }
+  if (collectionId) {
+    params.append("collection_id", collectionId);
   }
 
   const url = `${API_BASE}/admin/inquiries${params.toString() ? `?${params}` : ""}`;
@@ -206,6 +209,18 @@ export async function triggerSearch(inquiryId: string, topK: number = 10) {
 
   if (!res.ok) {
     throw new Error("Failed to trigger search");
+  }
+
+  return res.json() as Promise<SearchResponse>;
+}
+
+export async function searchWithFollowUpResponses(inquiryId: string, topK: number = 10) {
+  const res = await fetch(`${API_BASE}/inquiries/${inquiryId}/search-with-responses?top_k=${topK}`, {
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to search with follow-up responses");
   }
 
   return res.json() as Promise<SearchResponse>;
@@ -350,6 +365,20 @@ export async function getCollections() {
 
 export async function getCollection(collectionId: string) {
   const res = await fetch(`${API_BASE}/collections/${collectionId}`);
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch collection");
+  }
+
+  return res.json() as Promise<Collection>;
+}
+
+export async function getCollectionByName(name: string): Promise<Collection | null> {
+  const res = await fetch(`${API_BASE}/collections/by-name/${encodeURIComponent(name)}`);
+
+  if (res.status === 404) {
+    return null; // Collection not found
+  }
 
   if (!res.ok) {
     throw new Error("Failed to fetch collection");

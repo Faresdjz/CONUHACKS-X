@@ -1,80 +1,155 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, ChevronRight, MessageCircleQuestion } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronRight, MessageCircleQuestion, Loader2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { getFollowUpQuestions, submitFollowUpResponse, FollowUpQuestion } from "@/lib/api";
 
-// Mock questions for the demo
-const questions = [
-  {
-    id: 1,
-    type: "text",
-    question: "What specific brand is the item?",
-    description: "If you know the brand name or manufacturer, please specify it.",
-    placeholder: "e.g. Apple, Nike, Hydro Flask",
-  },
-  {
-    id: 2,
-    type: "choice",
-    question: "What is the primary material?",
-    description: "Select the material that best describes your item.",
-    options: ["Plastic", "Metal", "Fabric/Leather", "Glass", "Other"],
-  },
-  {
-    id: 3,
-    type: "text",
-    question: "Are there any distinguishing marks?",
-    description: "Scratches, stickers, engravings, or unique features.",
-    placeholder: "e.g. Small dent on the bottom left corner",
-  },
-  {
-    id: 4,
-    type: "choice",
-    question: "Where exactly did you check for it last?",
-    description: "Help us narrow down the search area.",
-    options: ["Cafeteria", "Library", "Gym", "Classroom", "Common Area"],
-  },
-];
+interface Question {
+  id: string;
+  question: string;
+  description: string;
+  placeholder?: string;
+}
 
 export default function FollowUpPage() {
+  const params = useParams();
+  const inquiryId = params.id as string;
+
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isCompleted, setIsCompleted] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch questions on mount
+  useEffect(() => {
+    async function fetchQuestions() {
+      if (!inquiryId) return;
+      
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await getFollowUpQuestions(inquiryId);
+        
+        // Filter to only show unanswered questions
+        const unansweredQuestions = response.questions.filter((q: FollowUpQuestion) => !q.response);
+        
+        if (response.questions.length === 0) {
+          setError("No follow-up questions found for this inquiry.");
+          return;
+        }
+
+        // If all questions are already answered, mark as completed
+        if (unansweredQuestions.length === 0) {
+          setIsCompleted(true);
+          return;
+        }
+
+        // Transform only unanswered questions to our format
+        const transformedQuestions: Question[] = unansweredQuestions.map((q: FollowUpQuestion) => ({
+          id: q.id,
+          question: q.question,
+          description: "Please provide your answer below.",
+          placeholder: "Type your answer here...",
+        }));
+
+        setQuestions(transformedQuestions);
+      } catch (err) {
+        console.error("Failed to fetch follow-up questions:", err);
+        setError("Failed to load follow-up questions. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchQuestions();
+  }, [inquiryId]);
 
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
 
-
-  const handleNext = () => {
-    if (!inputValue) return;
+  const handleNext = async () => {
+    if (!inputValue || !currentQuestion) return;
     
-    // Save answer
-    setAnswers(prev => ({ ...prev, [currentQuestion.id]: inputValue }));
-    
-    if (currentIndex < totalQuestions - 1) {
-      setInputValue(""); // Clear input or load existing answer for next Q if implemented
-      setCurrentIndex(prev => prev + 1);
-    } else {
-      console.log("Completed with answers:", { ...answers, [currentQuestion.id]: inputValue });
-      setIsCompleted(true);
+    try {
+      setSubmitting(true);
+      
+      // Submit the answer to the API
+      await submitFollowUpResponse(currentQuestion.id, inputValue);
+      
+      // Save answer locally
+      setAnswers(prev => ({ ...prev, [currentQuestion.id]: inputValue }));
+      
+      if (currentIndex < totalQuestions - 1) {
+        // Load next question's existing answer if any
+        const nextQuestion = questions[currentIndex + 1];
+        setInputValue(answers[nextQuestion.id] || "");
+        setCurrentIndex(prev => prev + 1);
+      } else {
+        setIsCompleted(true);
+      }
+    } catch (err) {
+      console.error("Failed to submit answer:", err);
+      setError("Failed to submit your answer. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleBack = () => {
     if (currentIndex > 0) {
+      const prevQuestion = questions[currentIndex - 1];
+      setInputValue(answers[prevQuestion.id] || "");
       setCurrentIndex(prev => prev - 1);
-      // Ideally load the previous answer back into inputValue here if we want persistent editing
-      setInputValue(""); 
     }
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-background">
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-accent/5 z-0" />
+        <div className="flex flex-col items-center gap-4 z-10">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+          <p className="text-muted-foreground">Loading questions...</p>
+        </div>
+      </main>
+    );
+  }
+
+  // Error state
+  if (error && questions.length === 0) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-background">
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-accent/5 z-0" />
+        <div className="w-full max-w-lg mx-auto relative overflow-hidden p-10 flex flex-col items-center text-center space-y-6 z-10">
+          <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
+            <AlertCircle className="w-10 h-10" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-2xl font-bold">No Questions Found</h3>
+            <p className="text-muted-foreground max-w-xs mx-auto">
+              {error}
+            </p>
+          </div>
+          <Button size="lg" asChild className="mt-4 w-full" variant="outline">
+            <Link href="/inquiries">Return to Inquiries</Link>
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
+  // Completed state
   if (isCompleted) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-background">
@@ -122,29 +197,32 @@ export default function FollowUpPage() {
         </Button>
       </motion.div>
 
+      {/* Progress indicator */}
+      <div className="absolute top-6 right-6 z-20 text-sm text-muted-foreground">
+        Question {currentIndex + 1} of {totalQuestions}
+      </div>
+
       {/* Main Card */}
       <div className="w-full max-w-lg relative z-10">
-
-
-        <motion.div
+        {currentQuestion && (
+          <motion.div
             key={currentIndex}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.3 }}
-        >
-          <div className="flex items-start gap-4 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500 flex-shrink-0">
-              <MessageCircleQuestion className="w-5 h-5" />
+          >
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500 flex-shrink-0">
+                <MessageCircleQuestion className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold leading-tight mb-2">{currentQuestion.question}</h2>
+                <p className="text-muted-foreground">{currentQuestion.description}</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold leading-tight mb-2">{currentQuestion.question}</h2>
-              <p className="text-muted-foreground">{currentQuestion.description}</p>
-            </div>
-          </div>
 
-          <div className="space-y-6">
-            {currentQuestion.type === "text" && (
+            <div className="space-y-6">
               <Input
                 autoFocus
                 value={inputValue}
@@ -152,48 +230,45 @@ export default function FollowUpPage() {
                 placeholder={currentQuestion.placeholder}
                 className="h-12 text-lg bg-background/50 border-white/20 focus:border-primary/50"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && inputValue) handleNext();
+                  if (e.key === "Enter" && inputValue && !submitting) handleNext();
                 }}
+                disabled={submitting}
               />
-            )}
 
-            {currentQuestion.type === "choice" && (
-              <RadioGroup value={inputValue} onValueChange={setInputValue} className="gap-3">
-                {currentQuestion.options?.map((option) => (
-                  <div key={option} className="flex items-center space-x-2">
-                    <RadioGroupItem value={option} id={option} className="peer sr-only" />
-                    <Label
-                      htmlFor={option}
-                      className="flex-1 flex items-center justify-between p-4 rounded-xl border border-white/10 peer-data-[state=checked]:border-primary/50 peer-data-[state=checked]:bg-primary/5 hover:bg-accent/5 cursor-pointer transition-all"
-                    >
-                      {option}
-                      {inputValue === option && <CheckCircle2 className="w-4 h-4 text-primary" />}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            )}
+              {error && (
+                <p className="text-red-500 text-sm">{error}</p>
+              )}
 
-            <div className="flex gap-3 pt-4">
-              <Button 
-                variant="outline" 
-                onClick={handleBack}
-                disabled={currentIndex === 0}
-                className="flex-1"
-              >
-                Back
-              </Button>
-              <Button 
-                onClick={handleNext}
-                disabled={!inputValue}
-                className="flex-[2] text-base"
-              >
-                {currentIndex === totalQuestions - 1 ? "Submit Support" : "Next Question"}
-                <ChevronRight className="w-4 h-4 ml-2" />
-              </Button>
+              <div className="flex gap-3 pt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={handleBack}
+                  disabled={currentIndex === 0 || submitting}
+                  className="flex-1"
+                >
+                  Back
+                </Button>
+                <Button 
+                  onClick={handleNext}
+                  disabled={!inputValue || submitting}
+                  className="flex-[2] text-base"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      {currentIndex === totalQuestions - 1 ? "Submit" : "Next Question"}
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
       </div>
     </main>
   );

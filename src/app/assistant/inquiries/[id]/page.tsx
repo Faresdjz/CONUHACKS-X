@@ -58,10 +58,15 @@ import {
   approveMatch, 
   rejectMatch,
   triggerSearch,
+  generateFollowUpQuestions,
+  sendFollowUpQuestions,
+  getFollowUpQuestions,
+  searchWithFollowUpResponses,
   BackendInquiry, 
   Match, 
   InquiryStatus,
-  MatchStatus
+  MatchStatus,
+  FollowUpQuestion
 } from "@/lib/api";
 
 interface PageProps {
@@ -156,9 +161,11 @@ export default function InquiryReviewPage({ params }: PageProps) {
   
   // Follow-up state
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
+  const [savedFollowUpQuestions, setSavedFollowUpQuestions] = useState<FollowUpQuestion[]>([]);
   const [newQuestion, setNewQuestion] = useState("");
   const [generatingQuestions, setGeneratingQuestions] = useState(false);
   const [sendingFollowUp, setSendingFollowUp] = useState(false);
+  const [reSearching, setReSearching] = useState(false);
   
   // Match selection state
   const [selectedMatchForAction, setSelectedMatchForAction] = useState<string | null>(null);
@@ -167,10 +174,12 @@ export default function InquiryReviewPage({ params }: PageProps) {
     Promise.all([
       getInquiry(id),
       getInquiryMatches(id),
+      getFollowUpQuestions(id).catch(() => ({ questions: [], total: 0 })),
     ])
-      .then(([inquiryData, matchesData]) => {
+      .then(([inquiryData, matchesData, followUpData]) => {
         setInquiry(inquiryData);
         setMatches(matchesData.matches);
+        setSavedFollowUpQuestions(followUpData.questions);
       })
       .catch((err) => {
         console.error("Failed to fetch data:", err);
@@ -311,33 +320,33 @@ export default function InquiryReviewPage({ params }: PageProps) {
               <Info className="w-4 h-4" />
               Inquiry Details
             </TabsTrigger>
-            {inquiry.status !== "denied" && (
-              <>
-                <TabsTrigger 
-                  value="matches"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-2"
-                >
-                  <Zap className="w-4 h-4" />
-                  AI Matches
-                  {matches.length > 0 && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                      {matches.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="followup"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-2"
-                >
-                  <MessageCircleQuestion className="w-4 h-4" />
-                  Follow Up
-                  {followUpQuestions.length > 0 && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                      {followUpQuestions.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </>
+            {inquiry.status !== "follow_up" && (inquiry.status === "matched" || inquiry.status === "under_review" || matches.length > 0) && (
+              <TabsTrigger 
+                value="matches"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-2"
+              >
+                <Zap className="w-4 h-4" />
+                AI Matches
+                {matches.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                    {matches.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+            {(inquiry.status === "follow_up" || inquiry.status === "matched") && (
+              <TabsTrigger 
+                value="followup"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-2"
+              >
+                <MessageCircleQuestion className="w-4 h-4" />
+                Follow Up
+                {savedFollowUpQuestions.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                    {savedFollowUpQuestions.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
             )}
           </TabsList>
 
@@ -673,7 +682,7 @@ export default function InquiryReviewPage({ params }: PageProps) {
                       transition={{ delay: index * 0.05 }}
                       className={`p-5 rounded-2xl border backdrop-blur-sm transition-all cursor-pointer ${
                         isSelected 
-                          ? "border-green-500 bg-green-500/5" 
+                          ? "border-primary bg-primary/5" 
                           : "border-border/50 bg-card/30 hover:border-accent/50 hover:bg-accent/5"
                       }`}
                       onClick={() => { setSelectedMatch(match); setDialogOpen(true); }}
@@ -768,7 +777,7 @@ export default function InquiryReviewPage({ params }: PageProps) {
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {isSelected && (
-                                <Badge className="text-[10px] uppercase bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30">
+                                <Badge className="text-[10px] uppercase bg-primary/15 text-primary border-primary/30">
                                   <Check className="w-3 h-3 mr-1" />
                                   Selected
                                 </Badge>
@@ -856,14 +865,95 @@ export default function InquiryReviewPage({ params }: PageProps) {
           {/* Follow Up Tab */}
           <TabsContent value="followup" className="space-y-6">
             <div className="rounded-2xl border border-border/50 backdrop-blur-sm p-6 space-y-6">
-              {/* Header */}
+              {/* Show saved questions and responses if any */}
+              {savedFollowUpQuestions.length > 0 && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold">Sent Questions & Responses</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Questions sent to user and their responses
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {savedFollowUpQuestions.map((q, index) => (
+                      <div 
+                        key={q.id}
+                        className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center text-green-500 text-xs font-medium flex-shrink-0">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{q.question}</p>
+                            {q.response ? (
+                              <div className="mt-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                                <p className="text-xs text-muted-foreground mb-1">User response:</p>
+                                <p className="text-sm">{q.response}</p>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground mt-1 italic">Awaiting response...</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Re-run Search Button - only show if there are responses */}
+                  {savedFollowUpQuestions.some(q => q.response) && (
+                    <Button
+                      className="w-full bg-blue-500/15 text-blue-600 hover:bg-blue-500/25 dark:text-blue-400"
+                      onClick={async () => {
+                        setReSearching(true);
+                        try {
+                          await searchWithFollowUpResponses(id);
+                          // Refresh matches
+                          const matchesData = await getInquiryMatches(id);
+                          setMatches(matchesData.matches);
+                          // Update status to matched
+                          setInquiry(prev => prev ? { ...prev, status: "matched" } : null);
+                        } catch (err) {
+                          console.error("Failed to re-search:", err);
+                        } finally {
+                          setReSearching(false);
+                        }
+                      }}
+                      disabled={reSearching}
+                    >
+                      {reSearching ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4 mr-2" />
+                          Re-run Search with Responses
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  
+                  <Separator />
+                </>
+              )}
+
+              {/* Header for new questions */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
                     <MessageCircleQuestion className="w-5 h-5 text-orange-500" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold">Follow Up Questions</h2>
+                    <h2 className="text-lg font-semibold">
+                      {savedFollowUpQuestions.length > 0 ? "Add More Questions" : "Follow Up Questions"}
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                       Request additional information from the user
                     </p>
@@ -873,17 +963,16 @@ export default function InquiryReviewPage({ params }: PageProps) {
                   variant="outline"
                   onClick={async () => {
                     setGeneratingQuestions(true);
-                    // TODO: Call API to generate questions
-                    setTimeout(() => {
-                      setFollowUpQuestions([
-                        "Can you describe any unique markings or scratches on the item?",
-                        "What was the approximate location where you last had the item?",
-                        "Are there any stickers, engravings, or personal modifications?",
-                      ]);
+                    try {
+                      const response = await generateFollowUpQuestions(id);
+                      setFollowUpQuestions(response.questions);
+                    } catch (err) {
+                      console.error("Failed to generate questions:", err);
+                    } finally {
                       setGeneratingQuestions(false);
-                    }, 1500);
+                    }
                   }}
-                  disabled={generatingQuestions}
+                  disabled={generatingQuestions || inquiry.status === "follow_up"}
                 >
                   {generatingQuestions ? (
                     <>
@@ -908,6 +997,7 @@ export default function InquiryReviewPage({ params }: PageProps) {
                   onChange={(e) => setNewQuestion(e.target.value)}
                   placeholder="Add a custom question..."
                   className="flex-1"
+                  disabled={inquiry.status === "follow_up"}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newQuestion.trim()) {
                       setFollowUpQuestions(prev => [...prev, newQuestion.trim()]);
@@ -922,19 +1012,19 @@ export default function InquiryReviewPage({ params }: PageProps) {
                       setNewQuestion("");
                     }
                   }}
-                  disabled={!newQuestion.trim()}
+                  disabled={!newQuestion.trim() || inquiry.status === "follow_up"}
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Add
                 </Button>
               </div>
 
-              {/* Questions List */}
+              {/* Questions List (draft questions not yet sent) */}
               <div className="space-y-3">
                 {followUpQuestions.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <MessageCircleQuestion className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No follow-up questions yet</p>
+                    <p>No new questions to send</p>
                     <p className="text-sm mt-1">Generate AI questions or add your own above</p>
                   </div>
                 ) : (
@@ -964,13 +1054,13 @@ export default function InquiryReviewPage({ params }: PageProps) {
 
               {/* Send Button */}
               <Separator />
-              {inquiry.status === "follow_up" ? (
+              {inquiry.status === "follow_up" && followUpQuestions.length === 0 ? (
                 <Button
                   className="w-full bg-green-500/15 text-green-600 dark:text-green-400"
                   disabled
                 >
                   <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Request Sent
+                  Follow-up Sent - Awaiting Response
                 </Button>
               ) : (
                 <Button
@@ -978,9 +1068,13 @@ export default function InquiryReviewPage({ params }: PageProps) {
                   onClick={async () => {
                     setSendingFollowUp(true);
                     try {
-                      await updateInquiryStatus(id, "follow_up");
+                      // Save questions to backend (this also updates status to follow_up)
+                      const response = await sendFollowUpQuestions(id, followUpQuestions);
+                      
+                      // Update local state
                       setInquiry(prev => prev ? { ...prev, status: "follow_up" } : null);
-                      // TODO: Save questions to backend
+                      setSavedFollowUpQuestions(prev => [...prev, ...response.questions]);
+                      setFollowUpQuestions([]); // Clear draft questions
                     } catch (err) {
                       console.error("Failed to send follow-up:", err);
                     } finally {

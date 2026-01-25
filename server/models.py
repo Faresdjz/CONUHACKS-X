@@ -175,6 +175,44 @@ class VerificationQuestionsResponse(BaseModel):
     item_id: str
 
 
+# ============== Follow-Up Models ==============
+
+class FollowUpQuestionResponse(BaseModel):
+    """Response model for a follow-up question."""
+    id: str
+    inquiry_id: str
+    question: str
+    question_type: str = "text"
+    options: Optional[List[str]] = None
+    response: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FollowUpQuestionsListResponse(BaseModel):
+    """Response model for listing follow-up questions."""
+    questions: List[FollowUpQuestionResponse]
+    total: int
+
+
+class FollowUpQuestionCreate(BaseModel):
+    """Request model for creating follow-up questions."""
+    questions: List[str] = Field(..., description="List of questions to send to user")
+
+
+class FollowUpResponseSubmit(BaseModel):
+    """Request model for submitting a follow-up response."""
+    response: str = Field(..., description="User's response to the question")
+
+
+class GeneratedQuestionsResponse(BaseModel):
+    """Response model for AI-generated questions."""
+    questions: List[str] = Field(..., description="Generated follow-up questions")
+
+
 # ============== Gemini Structured Output Models ==============
 
 class CaptionResponse(BaseModel):
@@ -209,6 +247,11 @@ class OCRResponse(BaseModel):
 class VerificationQuestionsOutput(BaseModel):
     """Structured response from Gemini for verification questions."""
     questions: List[str] = Field(..., description="Verification questions only true owner can answer")
+
+
+class FollowUpQuestionsOutput(BaseModel):
+    """Structured response from Gemini for follow-up questions."""
+    questions: List[str] = Field(..., description="Follow-up questions to gather more details about the lost item")
 
 
 # ============== Health/Stats Models ==============
