@@ -102,14 +102,16 @@ DEFAULT_FOLLOWUP_QUESTIONS = [
 
 def generate_follow_up_questions(description: str | None, image_url: str | None, skip_on_error: bool = True) -> list[str]:
     """Generate follow-up questions based on the inquiry description and/or image."""
+    import requests
+    
     if not description and not image_url:
         return DEFAULT_FOLLOWUP_QUESTIONS
     
     description = description if description else "No description provided"
     
     try:
-        contents = [
-            f"""
+        # Build the prompt
+        prompt = f"""
             A user has submitted a lost item inquiry with the following description:
             "{description}"
             
@@ -119,8 +121,31 @@ def generate_follow_up_questions(description: str | None, image_url: str | None,
             - Be clear and easy to answer
             - Focus on: brand, size, distinguishing marks, contents, accessories, location details
             - IF there is personal info, YOU HAVE TO ASK QUESTIONS ABOUT IT (name, phone number, email, address, etc.)
+            - If an image is provided, ask questions about specific visual details you can see
+            - THESES QUESTIONS ARE TEST QUESTIONS, THE ONE BEING QUESTIONED MAY OR MAY NOT BE THE OWNER, SO ASK QUESTIONS THAT ARE NOT OBVIOUSLY ANSWERED
             """
-        ]
+        
+        contents = [prompt]
+        
+        # Include the image if available
+        if image_url:
+            try:
+                image_response = requests.get(image_url, timeout=10)
+                if image_response.status_code == 200:
+                    # Determine mime type from content-type header or default to jpeg
+                    content_type = image_response.headers.get('content-type', 'image/jpeg')
+                    if 'png' in content_type:
+                        mime_type = 'image/png'
+                    elif 'gif' in content_type:
+                        mime_type = 'image/gif'
+                    elif 'webp' in content_type:
+                        mime_type = 'image/webp'
+                    else:
+                        mime_type = 'image/jpeg'
+                    
+                    contents.append(types.Part.from_bytes(data=image_response.content, mime_type=mime_type))
+            except Exception as img_error:
+                print(f"[Could not fetch image for follow-up questions: {str(img_error)[:50]}]")
         
         response = client.models.generate_content(
             model=MODEL,
