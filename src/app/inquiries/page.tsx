@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, Search, LucideIcon } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, Search, LucideIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
+import { getInquiries, BackendInquiry } from "@/lib/api";
 
 type InquiryStatus = "submitted" | "reviewed" | "follow_up" | "resolved" | "denied";
 
@@ -18,30 +20,29 @@ interface Inquiry {
   imageUrl?: string;
 }
 
-const inquiries: Inquiry[] = [
-  {
-    id: "1",
-    item: "Black Leather Wallet",
-    description: "Lost near the cafeteria. Contains ID and credit cards.",
-    date: "Oct 24, 2025",
-    status: "resolved",
-    imageUrl: "https://images.unsplash.com/photo-1627123424574-724758594e93?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3"
-  },
-  {
-    id: "2",
-    item: "AirPods Pro Case",
-    description: "White case with a small scratch on the front.",
-    date: "Jan 12, 2026",
-    status: "follow_up",
-  },
-  {
-    id: "3",
-    item: "Blue Water Bottle",
-    description: "Hydroflask with stickers on it.",
-    date: "Dec 15, 2025",
-    status: "denied",
-  },
-];
+function formatDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function getItemTitle(description: string | null): string {
+  if (!description) return "Lost Item";
+  // Take first sentence or first 30 chars
+  const firstSentence = description.split(/[.!?]/)[0];
+  if (firstSentence.length <= 40) return firstSentence;
+  return firstSentence.slice(0, 37) + "...";
+}
+
+function mapBackendInquiry(backend: BackendInquiry): Inquiry {
+  return {
+    id: backend.id,
+    item: getItemTitle(backend.description),
+    description: backend.description || "",
+    date: formatDate(backend.created_at),
+    status: backend.status,
+    imageUrl: backend.image_url || undefined,
+  };
+}
 
 const statusConfig: Record<InquiryStatus, { label: string; className: string; icon: LucideIcon }> = {
   submitted: { 
@@ -72,6 +73,24 @@ const statusConfig: Record<InquiryStatus, { label: string; className: string; ic
 };
 
 export default function InquiriesPage() {
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getInquiries()
+      .then((data) => {
+        setInquiries(data.inquiries.map(mapBackendInquiry));
+      })
+      .catch((err) => {
+        console.error("Failed to fetch inquiries:", err);
+        setError("Failed to load inquiries");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
   return (
     <main className="min-h-screen bg-background relative overflow-hidden flex flex-col items-center pt-28 pb-12 px-4 md:px-6">
       {/* Background Elements */}
@@ -107,7 +126,29 @@ export default function InquiriesPage() {
         </motion.div>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="w-full max-w-4xl relative z-10 flex justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="w-full max-w-4xl relative z-10 text-center py-12">
+          <p className="text-destructive">{error}</p>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && inquiries.length === 0 && (
+        <div className="w-full max-w-4xl relative z-10 text-center py-12">
+          <p className="text-muted-foreground">No inquiries yet. Submit one to get started!</p>
+        </div>
+      )}
+
       {/* List */}
+      {!loading && !error && inquiries.length > 0 && (
       <div className="w-full max-w-4xl relative z-10 space-y-6">
         {inquiries.map((inquiry, index) => {
           const status = statusConfig[inquiry.status];
@@ -163,6 +204,7 @@ export default function InquiriesPage() {
           );
         })}
       </div>
+      )}
     </main>
   );
 }
