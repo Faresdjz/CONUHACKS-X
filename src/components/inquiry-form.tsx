@@ -7,7 +7,8 @@ import { Upload, X, Loader2, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input" 
+import { Input } from "@/components/ui/input"
+import { createInquiry } from "@/lib/api" 
 
 export function InquiryForm() {
   const [description, setDescription] = React.useState("")
@@ -47,12 +48,15 @@ export function InquiryForm() {
 
     setIsSubmitting(true)
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    console.log("Submitted:", { description, image: selectedImage })
-    setIsSubmitting(false)
-    setIsSuccess(true)
+    try {
+      await createInquiry(description, selectedImage || undefined)
+      setIsSuccess(true)
+    } catch (error) {
+      console.error("Failed to submit inquiry:", error)
+      alert("Failed to submit inquiry. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleReset = () => {

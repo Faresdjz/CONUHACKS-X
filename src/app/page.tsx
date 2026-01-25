@@ -69,7 +69,7 @@ export default function Home() {
             </CardContent>
             <CardFooter className="pt-4">
               <Button asChild className="w-full group-hover:bg-accent group-hover:text-accent-foreground transition-colors" variant="outline">
-                <Link href="/submit-inquiry">
+                <Link href="/inquiries">
                   Start Searching <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </Button>

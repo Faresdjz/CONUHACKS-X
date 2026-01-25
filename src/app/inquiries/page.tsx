@@ -4,42 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { InquiryCard, InquiryStatus } from "@/components/inquiry-card";
-
-interface Inquiry {
-  id: string;
-  item: string;
-  description: string;
-  date: string;
-  status: InquiryStatus;
-  imageUrl?: string;
-}
-
-const inquiries: Inquiry[] = [
-  {
-    id: "1",
-    item: "Black Leather Wallet",
-    description: "Lost near the cafeteria. Contains ID and credit cards.",
-    date: "Oct 24, 2025",
-    status: "resolved",
-    imageUrl: "https://images.unsplash.com/photo-1627123424574-724758594e93?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3"
-  },
-  {
-    id: "2",
-    item: "AirPods Pro Case",
-    description: "White case with a small scratch on the front.",
-    date: "Jan 12, 2026",
-    status: "follow_up",
-  },
-  {
-    id: "3",
-    item: "Blue Water Bottle",
-    description: "Hydroflask with stickers on it.",
-    date: "Dec 15, 2025",
-    status: "denied",
-  },
-];
-
+import { InquiriesList } from "@/components/inquiries-list";
 
 export default function InquiriesPage() {
   return (
@@ -68,7 +33,7 @@ export default function InquiriesPage() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="space-y-2"
+          className="space-y-4"
         >
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/50 pb-1">My Inquiries</h1>
           <p className="text-muted-foreground text-lg">
@@ -77,39 +42,9 @@ export default function InquiriesPage() {
         </motion.div>
       </div>
 
-      {/* List */}
-      <div className="w-full max-w-4xl relative z-10 space-y-6">
-        {inquiries.map((inquiry, index) => {
-          const isFollowUp = inquiry.status === "follow_up";
-
-          return (
-            <motion.div
-              key={inquiry.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1, duration: 0.5 }}
-            >
-              <InquiryCard 
-                id={inquiry.id}
-                title={inquiry.item}
-                description={inquiry.description}
-                date={inquiry.date}
-                status={inquiry.status}
-                imageUrl={inquiry.imageUrl}
-                action={
-                  isFollowUp && (
-                    <Link href={`/inquiries/${inquiry.id}/follow-up`}>
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-white group-hover:text-white/80 transition-colors">
-                        <span>Resolve</span>
-                        <ArrowLeft className="w-3.5 h-3.5 rotate-180 transition-transform group-hover:translate-x-1" />
-                      </div>
-                    </Link>
-                  )
-                }
-              />
-            </motion.div>
-          );
-        })}
+      {/* Content */}
+      <div className="w-full max-w-4xl relative z-10">
+        <InquiriesList />
       </div>
     </main>
   );

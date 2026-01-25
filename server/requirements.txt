@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pillow
+torch
+transformers
+pymilvus
+google-genai
+python-dotenv
+pydantic
+supabase
+requests
+PyJWT[crypto]

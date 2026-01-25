@@ -22,8 +22,8 @@ export default function SearchPage() {
         className="absolute top-6 left-6 z-20"
       >
         <Button variant="ghost" size="sm" asChild className="hover:bg-accent/10">
-          <Link href="/">
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
+          <Link href="/inquiries">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Inquiries
           </Link>
         </Button>
       </motion.div>
