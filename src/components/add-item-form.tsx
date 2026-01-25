@@ -114,7 +114,7 @@ export function AddItemForm({ isOpen, onClose, onSubmit }: AddItemFormProps) {
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none"
           >
-            <div className="w-full max-w-lg bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950/20 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl pointer-events-auto overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="w-full max-w-lg bg-background border rounded-xl shadow-lg pointer-events-auto overflow-hidden flex flex-col max-h-[90vh]">
               
               {/* Header */}
               <div className="flex items-center justify-between p-6">

@@ -121,11 +121,14 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 
 // ============== User Inquiry Functions ==============
 
-export async function createInquiry(description: string, image?: File) {
+export async function createInquiry(description: string, image?: File, collectionName?: string) {
   const formData = new FormData();
   formData.append("description", description);
   if (image) {
     formData.append("image", image);
+  }
+  if (collectionName) {
+    formData.append("collection_name", collectionName);
   }
 
   const headers = await getAuthHeaders();

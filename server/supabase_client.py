@@ -48,14 +48,18 @@ def delete_item(item_id: str):
 
 # ============== Inquiries Operations ==============
 
-def create_inquiry(user_id: Optional[str], image_url: Optional[str], description: Optional[str]):
+def create_inquiry(user_id: Optional[str], image_url: Optional[str], description: Optional[str], collection_id: Optional[str] = None):
     """Create a new inquiry."""
-    return supabase.table("inquiries").insert({
+    data = {
         "user_id": user_id,
         "image_url": image_url,
         "description": description,
         "status": "submitted"
-    }).execute()
+    }
+    if collection_id:
+        data["collection_id"] = collection_id
+        
+    return supabase.table("inquiries").insert(data).execute()
 
 
 def get_inquiry(inquiry_id: str):
@@ -157,3 +161,9 @@ def delete_collection(collection_id: str):
 def get_items_by_collection(collection_id: str):
     """Get all items in a collection."""
     return supabase.table("items").select("*").eq("collection_id", collection_id).order("created_at", desc=True).execute()
+
+
+def get_collection_by_name(name: str):
+    """Get a collection by name (case-insensitive)."""
+    # Using ilike for case-insensitive matching
+    return supabase.table("collections").select("*").ilike("name", name).limit(1).execute()

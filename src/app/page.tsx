@@ -49,7 +49,7 @@ export default function Home() {
           transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }}
           className="h-full"
         >
-          <Card className="h-full border-muted/20 bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-colors group relative overflow-hidden">
+          <Card className="h-full border-white/20 bg-transparent transition-colors group relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
              <CardHeader>
               <CardTitle className="text-2xl flex items-center gap-3">
@@ -84,7 +84,7 @@ export default function Home() {
           transition={{ delay: 0.2, duration: 0.8, ease: "easeOut" }}
           className="h-full"
         >
-          <Card className="h-full border-muted/20 bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-colors group relative overflow-hidden">
+          <Card className="h-full border-white/20 bg-transparent transition-colors group relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
             <CardHeader>
               <CardTitle className="text-2xl flex items-center gap-3">

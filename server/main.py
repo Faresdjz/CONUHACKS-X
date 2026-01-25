@@ -353,6 +353,7 @@ async def delete_collection(collection_id: str):
 async def create_inquiry(
     image: Optional[UploadFile] = File(None),
     description: Optional[str] = Form(None),
+    collection_name: Optional[str] = Form(None),
     user_id: str = Depends(get_current_user)
 ):
     """
@@ -366,6 +367,17 @@ async def create_inquiry(
     try:
         image_url = None
         inquiry_id = str(uuid.uuid4())
+        collection_id = None
+
+        # Look up collection if provided
+        if collection_name:
+            # Try to find existing collection
+            collection_result = db.get_collection_by_name(collection_name)
+            if collection_result.data:
+                collection_id = collection_result.data[0]["id"]
+                print(f"Found collection '{collection_name}' with ID: {collection_id}")
+            else:
+                print(f"Collection '{collection_name}' not found")
         
         # Upload image if provided
         if image:
@@ -377,7 +389,8 @@ async def create_inquiry(
         result = db.create_inquiry(
             user_id=user_id,
             image_url=image_url,
-            description=description
+            description=description,
+            collection_id=collection_id
         )
         
         inquiry_data = result.data[0]
@@ -386,6 +399,7 @@ async def create_inquiry(
             user_id=inquiry_data.get("user_id"),
             image_url=inquiry_data.get("image_url"),
             description=inquiry_data.get("description"),
+            collection_id=inquiry_data.get("collection_id"),
             status=InquiryStatus(inquiry_data["status"]),
             created_at=inquiry_data["created_at"],
             updated_at=inquiry_data["updated_at"]

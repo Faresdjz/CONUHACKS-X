@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getInquiries, BackendInquiry } from "@/lib/api";
@@ -91,15 +91,6 @@ export function InquiriesList() {
 
   return (
     <div className="w-full space-y-6">
-      {/* New Inquiry Button for non-empty state */}
-      <div className="flex justify-end mb-4">
-        <Button asChild size="sm">
-            <Link href="/submit-inquiry">
-                <Plus className="w-4 h-4 mr-2" /> New Inquiry
-            </Link>
-        </Button>
-      </div>
-
       {inquiries.map((inquiry, index) => {
         const isFollowUp = inquiry.status === "follow_up";
 

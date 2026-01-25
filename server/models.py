@@ -91,6 +91,7 @@ class InquiryResponse(BaseModel):
     user_id: Optional[str] = None
     image_url: Optional[str] = None
     description: Optional[str] = None
+    collection_id: Optional[str] = None
     status: InquiryStatus = InquiryStatus.SUBMITTED
     created_at: datetime
     updated_at: datetime
