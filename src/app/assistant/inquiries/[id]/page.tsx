@@ -417,7 +417,7 @@ export default function InquiryReviewPage({ params }: PageProps) {
                           { status: "under_review", label: "Reviewing", icon: FileSearch, color: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
                           { status: "follow_up", label: "Follow Up", icon: MessageCircleQuestion, color: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400" },
                           { status: "matched", label: "Matched", icon: CheckCircle2, color: "bg-green-500/15 text-green-600 dark:text-green-400" },
-                          ...(isDenied ? [] : [{ status: "resolved", label: "Resolved", icon: CheckCircle2, color: "bg-primary/15 text-primary" }]),
+                          ...(isDenied ? [] : [{ status: "resolved", label: "Resolved", icon: CheckCircle2, color: "bg-green-500/15 text-green-600 dark:text-green-400" }]),
                           ...(isDenied ? [{ status: "denied", label: "Denied", icon: XCircle, color: "bg-destructive/15 text-destructive" }] : []),
                         ];
                         
@@ -449,9 +449,11 @@ export default function InquiryReviewPage({ params }: PageProps) {
                                 <div className={`flex-1 h-0.5 mx-1 ${
                                   step.status === "matched" && isDenied
                                     ? "bg-destructive/50"
-                                    : isPast || isCurrent 
-                                      ? "bg-muted-foreground/30" 
-                                      : "bg-border/50"
+                                    : step.status === "matched" && isResolved
+                                      ? "bg-green-500/50"
+                                      : isPast || isCurrent 
+                                        ? "bg-muted-foreground/30" 
+                                        : "bg-border/50"
                                 }`} />
                               )}
                             </div>

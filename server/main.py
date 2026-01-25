@@ -702,6 +702,9 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
 
 def merge_and_rank(results: dict, weights: dict) -> list[dict]:
     """Combine scores from all search types with weighted averaging."""
+    # All possible score types
+    all_score_types = ["img_to_img", "img_to_caption", "desc_to_img", "desc_to_caption", "desc_to_desc"]
+    
     item_scores = {}
     
     for search_type, hits in results.items():
@@ -711,7 +714,8 @@ def merge_and_rank(results: dict, weights: dict) -> list[dict]:
             score = hit["distance"]  # Cosine similarity from Milvus
             
             if item_id not in item_scores:
-                item_scores[item_id] = {"scores": {}, "total": 0}
+                # Initialize all scores to 0
+                item_scores[item_id] = {"scores": {st: 0 for st in all_score_types}, "total": 0}
             
             item_scores[item_id]["scores"][search_type] = score
             item_scores[item_id]["total"] += score * weight
