@@ -18,6 +18,7 @@ class InquiryStatus(str, Enum):
     FOLLOW_UP = "follow_up"
     RESOLVED = "resolved"
     DENIED = "denied"
+    MATCHED = "matched"
 
 
 class MatchStatus(str, Enum):
