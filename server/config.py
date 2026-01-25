@@ -12,15 +12,18 @@ MILVUS_TOKEN = os.getenv("ADMIN_MILVUS_TOKEN")
 DINO_COLLECTION = "dino_collection"
 CLIP_IMAGE_COLLECTION = "clip_image_collection"
 CLIP_CAPTION_COLLECTION = "clip_caption_collection"
+SENTENCE_EMBEDDING_COLLECTION = "sentence_embedding_collection"
 
 # Embedding dimensions
 DINO_DIM = 1024
 CLIP_DIM = 768
+SENTENCE_EMBEDDING_DIM = 384  # paraphrase-multilingual-MiniLM-L12-v2
 
-# Search weights for 4-way comparison
+# Search weights for comparison
 SEARCH_WEIGHTS = {
-    "img_to_img": 0.35,       # Visual match is most important
-    "img_to_caption": 0.25,
-    "desc_to_img": 0.20,
-    "desc_to_caption": 0.20
+    "img_to_img": 0.30,       # Visual match is most important
+    "img_to_caption": 0.20,
+    "desc_to_img": 0.15,
+    "desc_to_caption": 0.15,
+    "desc_to_desc": 0.20      # Description-to-description using sentence embeddings
 }

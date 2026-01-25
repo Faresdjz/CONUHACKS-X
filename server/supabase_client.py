@@ -81,7 +81,7 @@ def update_inquiry_status(inquiry_id: str, status: str):
 # ============== Matches Operations ==============
 
 def create_match(inquiry_id: str, item_id: str, scores: dict):
-    """Create a match record with all 4 comparison scores."""
+    """Create a match record with all comparison scores."""
     return supabase.table("matches").insert({
         "inquiry_id": inquiry_id,
         "item_id": item_id,
@@ -89,6 +89,7 @@ def create_match(inquiry_id: str, item_id: str, scores: dict):
         "img_to_caption_score": scores.get("img_to_caption"),
         "desc_to_img_score": scores.get("desc_to_img"),
         "desc_to_caption_score": scores.get("desc_to_caption"),
+        "desc_to_desc_score": scores.get("desc_to_desc"),
         "combined_score": scores.get("total"),
         "status": "pending"
     }).execute()

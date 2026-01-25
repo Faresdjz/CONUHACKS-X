@@ -17,7 +17,7 @@ from models import (
 )
 import supabase_client as db
 import milvus
-from embeddings import embed_image_dino, embed_image_clip, embed_text_clip
+from embeddings import embed_image_dino, embed_image_clip, embed_text_clip, embed_text
 from gemini import generate_caption, extract_text_from_image, generate_verification_questions
 from auth import get_current_user, get_optional_user
 
@@ -86,6 +86,7 @@ async def get_stats():
         dino_collection=CollectionStats(**milvus_stats.get("dino_collection", {"exists": False})),
         clip_image_collection=CollectionStats(**milvus_stats.get("clip_image_collection", {"exists": False})),
         clip_caption_collection=CollectionStats(**milvus_stats.get("clip_caption_collection", {"exists": False})),
+        sentence_embedding_collection=CollectionStats(**milvus_stats.get("sentence_embedding_collection", {"exists": False})),
         total_items=len(items_response.data) if items_response.data else 0
     )
 
@@ -130,13 +131,15 @@ async def create_item(
         dino_embedding = embed_image_dino(pil_image)
         clip_image_embedding = embed_image_clip(pil_image)
         clip_caption_embedding = embed_text_clip(caption)
+        sentence_embedding = embed_text(caption) if caption else [0.0] * 384  # Generate sentence embedding for caption
         
         # 5. Insert into Milvus collections
         milvus.insert_item_embeddings(
             item_id=item_id,
             dino_embedding=dino_embedding,
             clip_image_embedding=clip_image_embedding,
-            clip_caption_embedding=clip_caption_embedding
+            clip_caption_embedding=clip_caption_embedding,
+            sentence_embedding=sentence_embedding
         )
         
         # 6. Insert into Supabase
@@ -354,6 +357,7 @@ async def get_inquiry_matches(inquiry_id: str):
                 img_to_caption_score=m.get("img_to_caption_score"),
                 desc_to_img_score=m.get("desc_to_img_score"),
                 desc_to_caption_score=m.get("desc_to_caption_score"),
+                desc_to_desc_score=m.get("desc_to_desc_score"),
                 combined_score=m["combined_score"],
                 status=MatchStatus(m["status"]),
                 reviewed_by=m.get("reviewed_by"),
@@ -371,13 +375,14 @@ async def get_inquiry_matches(inquiry_id: str):
 @app.post("/inquiries/{inquiry_id}/search", response_model=SearchResponse)
 async def search_for_matches(inquiry_id: str, top_k: int = 10):
     """
-    Trigger 4-way search for an inquiry and store results.
+    Trigger search for an inquiry and store results.
     
     Comparisons:
     1. Image → Image (DINOv2)
     2. Image → Caption (CLIP)
     3. Description → Image (CLIP)
     4. Description → Caption (CLIP)
+    5. Description → Description (Sentence Embeddings) - only for description-to-description
     """
     try:
         # Get inquiry
@@ -407,12 +412,16 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
         # If user provided a description
         if description:
             clip_txt_emb = embed_text_clip(description)
+            sentence_txt_emb = embed_text(description)  # Sentence embedding for description-to-description
             
             # 3. Description → Image (CLIP)
             results["desc_to_img"] = milvus.search_clip_image(clip_txt_emb, top_k=top_k * 2)
             
             # 4. Description → Caption (CLIP)
             results["desc_to_caption"] = milvus.search_clip_caption(clip_txt_emb, top_k=top_k * 2)
+            
+            # 5. Description → Description (Sentence Embeddings) - only description-to-description
+            results["desc_to_desc"] = milvus.search_sentence_embedding(sentence_txt_emb, top_k=top_k * 2)
         
         # Merge and rank results
         ranked_results = merge_and_rank(results, SEARCH_WEIGHTS)[:top_k]
@@ -432,6 +441,7 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
                 "img_to_caption": scores.get("img_to_caption"),
                 "desc_to_img": scores.get("desc_to_img"),
                 "desc_to_caption": scores.get("desc_to_caption"),
+                "desc_to_desc": scores.get("desc_to_desc"),
                 "total": r["total"]
             })
             
@@ -459,6 +469,7 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
                     img_to_caption=scores.get("img_to_caption"),
                     desc_to_img=scores.get("desc_to_img"),
                     desc_to_caption=scores.get("desc_to_caption"),
+                    desc_to_desc=scores.get("desc_to_desc"),
                     total=r["total"]
                 ),
                 item=item
@@ -511,6 +522,7 @@ async def get_pending_matches(limit: int = 100):
                 img_to_caption_score=m.get("img_to_caption_score"),
                 desc_to_img_score=m.get("desc_to_img_score"),
                 desc_to_caption_score=m.get("desc_to_caption_score"),
+                desc_to_desc_score=m.get("desc_to_desc_score"),
                 combined_score=m["combined_score"],
                 status=MatchStatus(m["status"]),
                 reviewed_by=m.get("reviewed_by"),
@@ -588,6 +600,97 @@ async def init_collections(drop_existing: bool = False):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/search/test", response_model=SearchResponse)
+async def test_search(
+    description: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    top_k: int = 10
+):
+    """
+    Test endpoint to search without creating an inquiry.
+    Accepts either description or image (or both).
+    """
+    if not description and not image:
+        raise HTTPException(status_code=400, detail="Must provide either description or image")
+    
+    try:
+        results = {}
+        
+        # If user provided an image
+        if image:
+            image_bytes = await image.read()
+            pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            
+            dino_emb = embed_image_dino(pil_image)
+            clip_img_emb = embed_image_clip(pil_image)
+            
+            # 1. Image → Image (DINOv2)
+            results["img_to_img"] = milvus.search_dino(dino_emb, top_k=top_k * 2)
+            
+            # 2. Image → Caption (CLIP)
+            results["img_to_caption"] = milvus.search_clip_caption(clip_img_emb, top_k=top_k * 2)
+        
+        # If user provided a description
+        if description:
+            clip_txt_emb = embed_text_clip(description)
+            sentence_txt_emb = embed_text(description)  # Sentence embedding for description-to-description
+            
+            # 3. Description → Image (CLIP)
+            results["desc_to_img"] = milvus.search_clip_image(clip_txt_emb, top_k=top_k * 2)
+            
+            # 4. Description → Caption (CLIP)
+            results["desc_to_caption"] = milvus.search_clip_caption(clip_txt_emb, top_k=top_k * 2)
+            
+            # 5. Description → Description (Sentence Embeddings) - only description-to-description
+            results["desc_to_desc"] = milvus.search_sentence_embedding(sentence_txt_emb, top_k=top_k * 2)
+        
+        # Merge and rank results
+        ranked_results = merge_and_rank(results, SEARCH_WEIGHTS)[:top_k]
+        
+        # Build search results (without storing in database)
+        search_results = []
+        for r in ranked_results:
+            item_id = r["item_id"]
+            scores = r["scores"]
+            
+            # Get item details
+            try:
+                item_result = db.get_item(item_id)
+                item_data = item_result.data
+                item = ItemResponse(
+                    id=item_data["id"],
+                    image_url=item_data["image_url"],
+                    caption=item_data.get("caption"),
+                    extracted_text=item_data.get("extracted_text"),
+                    category=item_data.get("category"),
+                    status=ItemStatus(item_data["status"]),
+                    created_at=item_data["created_at"],
+                    updated_at=item_data["updated_at"]
+                )
+            except:
+                item = None
+            
+            search_results.append(SearchResult(
+                item_id=item_id,
+                scores=MatchScores(
+                    img_to_img=scores.get("img_to_img"),
+                    img_to_caption=scores.get("img_to_caption"),
+                    desc_to_img=scores.get("desc_to_img"),
+                    desc_to_caption=scores.get("desc_to_caption"),
+                    desc_to_desc=scores.get("desc_to_desc"),
+                    total=r["total"]
+                ),
+                item=item
+            ))
+        
+        return SearchResponse(
+            inquiry_id="test",  # Dummy ID for testing
+            results=search_results,
+            total=len(search_results)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
