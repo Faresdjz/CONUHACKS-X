@@ -681,7 +681,7 @@ export default function InquiryReviewPage({ params }: PageProps) {
               </div>
             )}
 
-            {/* Matched - Confirm, Follow Up, or Deny */}
+            {/* Matched - Confirm or Deny */}
             {inquiry.status === "matched" && (
               selectedMatchForAction ? (
                 <div className="space-y-2">
@@ -702,24 +702,14 @@ export default function InquiryReviewPage({ params }: PageProps) {
                       </>
                     )}
                   </Button>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      onClick={() => handleStatusChange("follow_up")}
-                      variant="outline"
-                      className="h-10"
-                    >
-                      <MessageCircleQuestion className="w-4 h-4 mr-2" />
-                      Follow Up
-                    </Button>
-                    <Button 
-                      onClick={() => handleStatusChange("denied")}
-                      variant="outline"
-                      className="h-10"
-                    >
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Deny
-                    </Button>
-                  </div>
+                  <Button 
+                    onClick={() => handleStatusChange("denied")}
+                    variant="outline"
+                    className="w-full h-10"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Deny
+                  </Button>
                 </div>
               ) : (
                 <Alert>
