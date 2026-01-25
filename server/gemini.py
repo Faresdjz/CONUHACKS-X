@@ -118,7 +118,7 @@ def generate_follow_up_questions(description: str | None, image_url: str | None,
             - Ask for specific details that would help identify the exact item
             - Be clear and easy to answer
             - Focus on: brand, size, distinguishing marks, contents, accessories, location details
-            - NOT ask for information already provided in the description
+            - IF there is personal info, YOU HAVE TO ASK QUESTIONS ABOUT IT (name, phone number, email, address, etc.)
             """
         ]
         
