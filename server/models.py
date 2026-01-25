@@ -81,11 +81,12 @@ class InquiryListResponse(BaseModel):
 # ============== Match Models ==============
 
 class MatchScores(BaseModel):
-    """Individual scores from 4-way comparison."""
+    """Individual scores from comparison."""
     img_to_img: Optional[float] = Field(None, description="DINOv2: user image vs item image")
     img_to_caption: Optional[float] = Field(None, description="CLIP: user image vs item caption")
     desc_to_img: Optional[float] = Field(None, description="CLIP: user description vs item image")
     desc_to_caption: Optional[float] = Field(None, description="CLIP: user description vs item caption")
+    desc_to_desc: Optional[float] = Field(None, description="Sentence embeddings: user description vs item caption")
     total: float = Field(..., description="Combined weighted score")
 
 
@@ -98,6 +99,7 @@ class MatchResponse(BaseModel):
     img_to_caption_score: Optional[float] = None
     desc_to_img_score: Optional[float] = None
     desc_to_caption_score: Optional[float] = None
+    desc_to_desc_score: Optional[float] = None
     combined_score: float
     status: MatchStatus = MatchStatus.PENDING
     reviewed_by: Optional[str] = None
@@ -189,6 +191,7 @@ class SystemStats(BaseModel):
     dino_collection: CollectionStats
     clip_image_collection: CollectionStats
     clip_caption_collection: CollectionStats
+    sentence_embedding_collection: CollectionStats
     total_items: int
 
 

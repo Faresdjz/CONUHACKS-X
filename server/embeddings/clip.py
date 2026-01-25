@@ -88,3 +88,5 @@ def embed_text_clip(text: str) -> list[float]:
     
     # Convert to list and return
     return embeddings[0].cpu().numpy().tolist()
+
+

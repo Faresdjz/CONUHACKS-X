@@ -3,7 +3,8 @@ from dotenv import load_dotenv
 from config import (
     MILVUS_URI, MILVUS_TOKEN,
     DINO_COLLECTION, CLIP_IMAGE_COLLECTION, CLIP_CAPTION_COLLECTION,
-    DINO_DIM, CLIP_DIM
+    SENTENCE_EMBEDDING_COLLECTION,
+    DINO_DIM, CLIP_DIM, SENTENCE_EMBEDDING_DIM
 )
 
 load_dotenv()
@@ -20,9 +21,10 @@ def init_collections(drop_existing: bool = False):
         drop_existing: If True, drop existing collections before creating
     """
     collections = [
-        (DINO_COLLECTION, DINO_DIM),           # DINOv2 image embeddings
-        (CLIP_IMAGE_COLLECTION, CLIP_DIM),     # CLIP image embeddings
-        (CLIP_CAPTION_COLLECTION, CLIP_DIM),   # CLIP caption embeddings
+        (DINO_COLLECTION, DINO_DIM),                    # DINOv2 image embeddings
+        (CLIP_IMAGE_COLLECTION, CLIP_DIM),              # CLIP image embeddings
+        (CLIP_CAPTION_COLLECTION, CLIP_DIM),            # CLIP caption embeddings
+        (SENTENCE_EMBEDDING_COLLECTION, SENTENCE_EMBEDDING_DIM),  # Sentence embeddings for descriptions
     ]
     
     for collection_name, dimension in collections:
@@ -47,16 +49,18 @@ def insert_item_embeddings(
     item_id: str,
     dino_embedding: list[float],
     clip_image_embedding: list[float],
-    clip_caption_embedding: list[float]
+    clip_caption_embedding: list[float],
+    sentence_embedding: list[float]
 ) -> None:
     """
-    Insert embeddings for a new item into all three collections.
+    Insert embeddings for a new item into all collections.
     
     Args:
         item_id: UUID of the item (shared across collections)
         dino_embedding: DINOv2 image embedding (1024 dim)
         clip_image_embedding: CLIP image embedding (768 dim)
         clip_caption_embedding: CLIP caption embedding (768 dim)
+        sentence_embedding: Sentence embedding for caption (384 dim)
     """
     # Insert into dino_collection
     client.insert(
@@ -75,16 +79,22 @@ def insert_item_embeddings(
         collection_name=CLIP_CAPTION_COLLECTION,
         data=[{"id": item_id, "vector": clip_caption_embedding}]
     )
+    
+    # Insert into sentence_embedding_collection
+    client.insert(
+        collection_name=SENTENCE_EMBEDDING_COLLECTION,
+        data=[{"id": item_id, "vector": sentence_embedding}]
+    )
 
 
 def delete_item_embeddings(item_id: str) -> None:
     """
-    Delete embeddings for an item from all three collections.
+    Delete embeddings for an item from all collections.
     
     Args:
         item_id: UUID of the item to delete
     """
-    for collection_name in [DINO_COLLECTION, CLIP_IMAGE_COLLECTION, CLIP_CAPTION_COLLECTION]:
+    for collection_name in [DINO_COLLECTION, CLIP_IMAGE_COLLECTION, CLIP_CAPTION_COLLECTION, SENTENCE_EMBEDDING_COLLECTION]:
         client.delete(
             collection_name=collection_name,
             filter=f'id == "{item_id}"'
@@ -151,10 +161,30 @@ def search_clip_caption(query_embedding: list[float], top_k: int = 10) -> list[d
     return results[0] if results else []
 
 
+def search_sentence_embedding(query_embedding: list[float], top_k: int = 10) -> list[dict]:
+    """
+    Search sentence_embedding_collection for description-to-description matching.
+    
+    Args:
+        query_embedding: Sentence embedding of query description
+        top_k: Number of results to return
+        
+    Returns:
+        List of matches with id and distance
+    """
+    results = client.search(
+        collection_name=SENTENCE_EMBEDDING_COLLECTION,
+        data=[query_embedding],
+        limit=top_k,
+        output_fields=["id"]
+    )
+    return results[0] if results else []
+
+
 def get_collection_stats():
     """Get statistics for all collections."""
     stats = {}
-    for collection_name in [DINO_COLLECTION, CLIP_IMAGE_COLLECTION, CLIP_CAPTION_COLLECTION]:
+    for collection_name in [DINO_COLLECTION, CLIP_IMAGE_COLLECTION, CLIP_CAPTION_COLLECTION, SENTENCE_EMBEDDING_COLLECTION]:
         if client.has_collection(collection_name):
             # Get collection info
             stats[collection_name] = {
