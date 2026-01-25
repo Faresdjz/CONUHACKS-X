@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
@@ -19,6 +19,7 @@ import supabase_client as db
 import milvus
 from embeddings import embed_image_dino, embed_image_clip, embed_text_clip
 from gemini import generate_caption, extract_text_from_image, generate_verification_questions
+from auth import get_current_user, get_optional_user
 
 app = FastAPI(
     title="Lost and Found API",
@@ -250,11 +251,12 @@ async def delete_item(item_id: str):
 async def create_inquiry(
     image: Optional[UploadFile] = File(None),
     description: Optional[str] = Form(None),
-    user_id: Optional[str] = Form(None)
+    user_id: str = Depends(get_current_user)
 ):
     """
     Submit a new inquiry for a lost item.
     User can provide image, text description, or both.
+    Requires authentication - user_id is extracted from JWT token.
     """
     if not image and not description:
         raise HTTPException(status_code=400, detail="Must provide either image or description")
@@ -269,7 +271,7 @@ async def create_inquiry(
             file_path = f"inquiries/{inquiry_id}.jpg"
             image_url = db.upload_image("inquiries", file_path, image_bytes)
         
-        # Create inquiry in Supabase
+        # Create inquiry in Supabase with authenticated user_id
         result = db.create_inquiry(
             user_id=user_id,
             image_url=image_url,
@@ -296,10 +298,11 @@ async def list_inquiries(
     limit: int = 100,
     offset: int = 0,
     status: Optional[str] = None,
-    user_id: Optional[str] = None
+    user_id: str = Depends(get_current_user)
 ):
-    """List inquiries with optional filtering."""
+    """List inquiries for the authenticated user."""
     try:
+        # Only return inquiries for the authenticated user
         result = db.get_inquiries(limit=limit, offset=offset, status=status, user_id=user_id)
         inquiries = [
             InquiryResponse(

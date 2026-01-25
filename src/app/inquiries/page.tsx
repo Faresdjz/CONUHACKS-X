@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, Search, LucideIcon, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, Search, LucideIcon, Loader2, Plus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -117,12 +117,19 @@ export default function InquiriesPage() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="space-y-2"
+          className="space-y-4"
         >
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/50 pb-1">My Inquiries</h1>
           <p className="text-muted-foreground text-lg">
             Track the status of your lost item reports.
           </p>
+          {!loading && inquiries.length > 0 && (
+            <Button asChild size="sm">
+              <Link href="/submit-inquiry">
+                <Plus className="w-4 h-4 mr-2" /> New Inquiry
+              </Link>
+            </Button>
+          )}
         </motion.div>
       </div>
 
@@ -142,8 +149,13 @@ export default function InquiriesPage() {
 
       {/* Empty State */}
       {!loading && !error && inquiries.length === 0 && (
-        <div className="w-full max-w-4xl relative z-10 text-center py-12">
+        <div className="w-full max-w-4xl relative z-10 text-center py-12 space-y-6">
           <p className="text-muted-foreground">No inquiries yet. Submit one to get started!</p>
+          <Button asChild>
+            <Link href="/submit-inquiry">
+              Report Lost Item <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
+            </Link>
+          </Button>
         </div>
       )}
 

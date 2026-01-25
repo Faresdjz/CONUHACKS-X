@@ -1,3 +1,5 @@
+import { createClient } from "@/lib/supabase/client";
+
 const API_BASE = "http://localhost:8000";
 
 export interface BackendInquiry {
@@ -15,6 +17,18 @@ export interface InquiriesResponse {
   total: number;
 }
 
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (session?.access_token) {
+    return {
+      Authorization: `Bearer ${session.access_token}`,
+    };
+  }
+  return {};
+}
+
 export async function createInquiry(description: string, image?: File) {
   const formData = new FormData();
   formData.append("description", description);
@@ -22,8 +36,11 @@ export async function createInquiry(description: string, image?: File) {
     formData.append("image", image);
   }
 
+  const headers = await getAuthHeaders();
+
   const res = await fetch(`${API_BASE}/inquiries`, {
     method: "POST",
+    headers,
     body: formData,
   });
 
@@ -35,7 +52,11 @@ export async function createInquiry(description: string, image?: File) {
 }
 
 export async function getInquiries() {
-  const res = await fetch(`${API_BASE}/inquiries`);
+  const headers = await getAuthHeaders();
+
+  const res = await fetch(`${API_BASE}/inquiries`, {
+    headers,
+  });
 
   if (!res.ok) {
     throw new Error("Failed to fetch inquiries");

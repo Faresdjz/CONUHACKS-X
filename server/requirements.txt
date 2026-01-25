@@ -10,3 +10,4 @@ python-dotenv
 pydantic
 supabase
 requests
+PyJWT[crypto]
