@@ -14,17 +14,42 @@ class ItemStatus(str, Enum):
 
 class InquiryStatus(str, Enum):
     SUBMITTED = "submitted"
+    UNDER_REVIEW = "under_review"
     REVIEWED = "reviewed"
     FOLLOW_UP = "follow_up"
+    MATCHED = "matched"
     RESOLVED = "resolved"
     DENIED = "denied"
-    MATCHED = "matched"
 
 
 class MatchStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+# ============== Collection Models ==============
+
+class CollectionResponse(BaseModel):
+    """Response model for a collection."""
+    id: str
+    name: str
+    created_at: datetime
+    item_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class CollectionListResponse(BaseModel):
+    """Response model for listing collections."""
+    collections: List["CollectionResponse"]
+    total: int
+
+
+class CollectionCreate(BaseModel):
+    """Request model for creating a collection."""
+    name: str
 
 
 # ============== Item Models ==============
@@ -36,6 +61,7 @@ class ItemResponse(BaseModel):
     caption: Optional[str] = None
     extracted_text: Optional[str] = None
     category: Optional[str] = None
+    collection_id: Optional[str] = None
     status: ItemStatus = ItemStatus.AVAILABLE
     created_at: datetime
     updated_at: datetime
@@ -48,6 +74,7 @@ class ItemUpdate(BaseModel):
     """Request model for updating an inventory item."""
     category: Optional[str] = None
     status: Optional[ItemStatus] = None
+    collection_id: Optional[str] = None
 
 
 class ItemListResponse(BaseModel):
@@ -76,6 +103,11 @@ class InquiryListResponse(BaseModel):
     """Response model for listing inquiries."""
     inquiries: List[InquiryResponse]
     total: int
+
+
+class InquiryStatusUpdate(BaseModel):
+    """Request model for updating inquiry status."""
+    status: InquiryStatus
 
 
 # ============== Match Models ==============

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, Search, Package, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -15,50 +15,56 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { 
+  getCollections, 
+  createCollection as createCollectionAPI, 
+  deleteCollection as deleteCollectionAPI,
+  Collection 
+} from "@/lib/api";
 
-// Mock Data
-interface Collection {
-  id: string;
-  name: string;
-  itemCount: number;
-  createdAt: string;
+function formatDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
-const initialCollections: Collection[] = [
-  { id: "1", name: "October 2025 Lost Items", itemCount: 12, createdAt: "2025-10-01" },
-  { id: "2", name: "Electronics", itemCount: 5, createdAt: "2025-09-15" },
-  { id: "3", name: "Clothing & Accessories", itemCount: 28, createdAt: "2025-09-10" },
-];
-
 export default function CollectionsPage() {
-  const [collections, setCollections] = useState<Collection[]>(initialCollections);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    getCollections()
+      .then((data) => setCollections(data.collections))
+      .catch((err) => console.error("Failed to fetch collections:", err))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const handleCreateCollection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollectionName.trim()) return;
 
     setIsCreating(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const newCollection: Collection = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: newCollectionName,
-      itemCount: 0,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-
-    setCollections([newCollection, ...collections]);
-    setNewCollectionName("");
-    setIsCreating(false);
-    setIsCreateModalOpen(false);
+    try {
+      const newCollection = await createCollectionAPI(newCollectionName);
+      setCollections([newCollection, ...collections]);
+      setNewCollectionName("");
+      setIsCreateModalOpen(false);
+    } catch (err) {
+      console.error("Failed to create collection:", err);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const handleDeleteCollection = (id: string) => {
-    setCollections(collections.filter((c) => c.id !== id));
+  const handleDeleteCollection = async (id: string) => {
+    try {
+      await deleteCollectionAPI(id);
+      setCollections(collections.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error("Failed to delete collection:", err);
+    }
   };
 
   return (
@@ -102,61 +108,67 @@ export default function CollectionsPage() {
 
       {/* Collections Grid */}
       <div className="w-full max-w-4xl relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <AnimatePresence>
-            {collections.map((collection) => (
-              <motion.div
-                key={collection.id}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                layout
-                transition={{ duration: 0.2 }}
-              >
-                <Card className="h-full border-muted-foreground/20 hover:border-primary/50 transition-colors bg-transparent hover:shadow-lg group relative overflow-hidden">
-                  <CardHeader>
-                    <CardTitle className="flex items-start justify-between gap-2">
-                        <span className="truncate">{collection.name}</span>
-                        <div className="flex shrink-0">
-                            {/* Delete Button */}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-2"
-                                onClick={() => handleDeleteCollection(collection.id)}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
-                        </div>
-                    </CardTitle>
-                    <CardDescription>Created on {collection.createdAt}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Package className="w-4 h-4" />
-                        <span>{collection.itemCount} items</span>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="pt-2">
-                        <Button variant="outline" className="w-full group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-colors" asChild>
-                            <Link href={`/assistant/collection/${collection.id}`}>View Items</Link>
-                        </Button>
-                  </CardFooter>
-                </Card>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          
-          {collections.length === 0 && (
-            <div className="col-span-full py-12 text-center text-muted-foreground">
-                <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Search className="w-8 h-8 opacity-50" />
-                </div>
-                <p className="text-lg font-medium">No collections found</p>
-                <p className="text-sm">Try creating a new one or adjusting your search.</p>
-            </div>
-          )}
-        </div>
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <AnimatePresence>
+              {collections.map((collection) => (
+                <motion.div
+                  key={collection.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  layout
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="h-full border-muted-foreground/20 hover:border-primary/50 transition-colors bg-transparent hover:shadow-lg group relative overflow-hidden">
+                    <CardHeader>
+                      <CardTitle className="flex items-start justify-between gap-2">
+                          <span className="truncate">{collection.name}</span>
+                          <div className="flex shrink-0">
+                              {/* Delete Button */}
+                              <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-2"
+                                  onClick={() => handleDeleteCollection(collection.id)}
+                              >
+                                  <Trash2 className="w-4 h-4" />
+                              </Button>
+                          </div>
+                      </CardTitle>
+                      <CardDescription>Created on {formatDate(collection.created_at)}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Package className="w-4 h-4" />
+                          <span>{collection.item_count} items</span>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="pt-2">
+                          <Button variant="outline" className="w-full group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-colors" asChild>
+                              <Link href={`/assistant/collection/${collection.id}`}>View Items</Link>
+                          </Button>
+                    </CardFooter>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            
+            {collections.length === 0 && (
+              <div className="col-span-full py-12 text-center text-muted-foreground">
+                  <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Search className="w-8 h-8 opacity-50" />
+                  </div>
+                  <p className="text-lg font-medium">No collections found</p>
+                  <p className="text-sm">Try creating a new one or adjusting your search.</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Create Button */}

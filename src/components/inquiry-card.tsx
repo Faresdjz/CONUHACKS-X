@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-export type InquiryStatus = "submitted" | "reviewed" | "follow_up" | "resolved" | "denied" | "pending" | "matched" | "rejected";
+export type InquiryStatus = "submitted" | "under_review" | "reviewed" | "follow_up" | "resolved" | "denied" | "pending" | "matched" | "rejected";
 
 interface InquiryCardProps {
   id: string;
@@ -25,6 +25,11 @@ const statusConfig: Record<InquiryStatus, { label: string; className: string; ic
     label: "Submitted", 
     className: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
     icon: Clock
+  },
+  under_review: { 
+    label: "Under Review", 
+    className: "bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500/25 border-orange-200 dark:border-orange-800",
+    icon: Search
   },
   pending: { 
     label: "Pending", 

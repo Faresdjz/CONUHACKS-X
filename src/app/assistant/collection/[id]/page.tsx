@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect, use } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Package, Calendar, Plus, MapPin } from "lucide-react";
+import { ArrowLeft, Package, Calendar, Plus, MapPin, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -18,111 +18,86 @@ import {
 } from "@/components/ui/card";
 import { InquiryCard, InquiryStatus } from "@/components/inquiry-card";
 import { AddItemForm, ItemFormData } from "@/components/add-item-form";
+import { 
+  getCollection, 
+  getCollectionItems, 
+  getAllInquiries,
+  createItem,
+  Item as APIItem,
+  BackendInquiry,
+  Collection
+} from "@/lib/api";
 
-interface Item {
-  id: string;
-  name: string;
-  description: string;
-  status: "stored" | "claimed" | "disposed";
-  foundDate: string;
-  location: string;
-  imageUrl?: string;
+function formatDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
-interface Inquiry {
-  id: string;
-  item: string;
-  description: string;
-  date: string;
-  status: InquiryStatus;
-  imageUrl?: string;
-  userEmail?: string;
+function getItemTitle(caption: string | null): string {
+  if (!caption) return "Found Item";
+  // Take first sentence or first 40 chars
+  const firstSentence = caption.split(/[.!?|]/)[0];
+  if (firstSentence.length <= 40) return firstSentence;
+  return firstSentence.slice(0, 37) + "...";
 }
 
-// Mock Data
-const mockItems: Item[] = [
-  {
-    id: "1",
-    name: "Blue Umbrella",
-    description: "Dark blue umbrella with wooden handle. Found near the main entrance.",
-    status: "stored",
-    foundDate: "2025-10-02",
-    location: "Main Entrance",
-    imageUrl: "https://images.unsplash.com/photo-1596704017254-9b121068fb31?w=800&auto=format&fit=crop&q=60"
-  },
-  {
-    id: "2",
-    name: "Math Textbook",
-    description: "Advanced Calculus 3rd Edition. Found in Room 302.",
-    status: "claimed",
-    foundDate: "2025-10-05",
-    location: "Room 302",
-  },
-  {
-    id: "3",
-    name: "Silver Watch",
-    description: "Silver wristwatch with metal band. Found in the library.",
-    status: "stored",
-    foundDate: "2025-10-08",
-    location: "Library",
-    imageUrl: "https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=800&auto=format&fit=crop&q=60"
-  }
-];
-
-const mockInquiries: Inquiry[] = [
-  {
-    id: "1",
-    item: "Black Leather Wallet",
-    description: "Lost near the cafeteria. Contains ID and credit cards.",
-    date: "Oct 24, 2025",
-    status: "resolved",
-    imageUrl: "https://images.unsplash.com/photo-1627123424574-724758594e93?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3"
-  },
-  {
-    id: "2",
-    item: "AirPods Pro Case",
-    description: "White case with a small scratch on the front.",
-    date: "Jan 12, 2026",
-    status: "follow_up",
-  },
-  {
-    id: "3",
-    item: "Blue Water Bottle",
-    description: "Hydroflask with stickers on it.",
-    date: "Dec 15, 2025",
-    status: "denied",
-  },
-];
+function getInquiryTitle(description: string | null): string {
+  if (!description) return "Lost Item";
+  const firstSentence = description.split(/[.!?]/)[0];
+  if (firstSentence.length <= 40) return firstSentence;
+  return firstSentence.slice(0, 37) + "...";
+}
 
 export default function CollectionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const [activeTab, setActiveTab] = useState("items");
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
-  const [items, setItems] = useState<Item[]>(mockItems);
-
-  const handleAddItem = (data: ItemFormData) => {
-    const newItem: Item = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: data.name,
-      description: data.description,
-      status: "stored", // Default state
-      foundDate: data.foundDate ? format(data.foundDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
-      location: data.location,
-      imageUrl: data.imageUrl,
-    };
-    setItems((prev) => [newItem, ...prev]);
-  };
+  
+  // Data states
+  const [collection, setCollection] = useState<Collection | null>(null);
+  const [items, setItems] = useState<APIItem[]>([]);
+  const [inquiries, setInquiries] = useState<BackendInquiry[]>([]);
+  
+  // Loading states
+  const [isLoadingCollection, setIsLoadingCollection] = useState(true);
+  const [isLoadingItems, setIsLoadingItems] = useState(true);
+  const [isLoadingInquiries, setIsLoadingInquiries] = useState(true);
 
   // Unwrap params safely using React.use() as required in Next.js 15+
   const { id } = use(params);
 
-  // Mock lookup for collection details
-  const collectionNames: Record<string, string> = {
-    "1": "October 2025 Lost Items",
-    "2": "Electronics",
-    "3": "Clothing & Accessories",
+  useEffect(() => {
+    // Fetch collection details
+    getCollection(id)
+      .then((data) => setCollection(data))
+      .catch((err) => console.error("Failed to fetch collection:", err))
+      .finally(() => setIsLoadingCollection(false));
+
+    // Fetch items for this collection
+    getCollectionItems(id)
+      .then((data) => setItems(data.items))
+      .catch((err) => console.error("Failed to fetch items:", err))
+      .finally(() => setIsLoadingItems(false));
+
+    // Fetch all inquiries (not filtered by collection for now)
+    getAllInquiries()
+      .then((data) => setInquiries(data.inquiries))
+      .catch((err) => console.error("Failed to fetch inquiries:", err))
+      .finally(() => setIsLoadingInquiries(false));
+  }, [id]);
+
+  const handleAddItem = async (data: ItemFormData) => {
+    if (!data.imageFile) {
+      throw new Error("Image is required");
+    }
+    
+    console.log("Adding item to collection:", id);
+    
+    const newItem = await createItem(data.imageFile, id, data.location || undefined);
+    console.log("Item created:", newItem);
+    setItems((prev) => [newItem, ...prev]);
   };
 
-  const collectionName = collectionNames[id] || `Collection #${id}`;
+  const collectionName = collection?.name || `Collection #${id}`;
 
   return (
     <main className="min-h-screen bg-background relative overflow-hidden flex flex-col items-center pt-28 pb-12 px-4 md:px-6">
@@ -182,51 +157,67 @@ export default function CollectionDetailsPage({ params }: { params: Promise<{ id
                     transition={{ duration: 0.2 }}
                     className="space-y-8"
                 >
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {items.map((item) => (
-                             <Card key={item.id} className="h-full border-muted-foreground/20 bg-transparent hover:border-primary/50 transition-colors backdrop-blur-sm group overflow-hidden flex flex-col p-0 gap-0">
-                                <div className="relative aspect-square w-full bg-muted/50 overflow-hidden border-b border-muted-foreground/10">
-                                    {item.imageUrl ? (
-                                        <Image 
-                                            src={item.imageUrl} 
-                                            alt={item.name}
-                                            fill
-                                            className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
-                                            <Package className="w-8 h-8" />
+                    {isLoadingItems ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {items.map((item) => (
+                                     <Card key={item.id} className="h-full border-muted-foreground/20 bg-transparent hover:border-primary/50 transition-colors backdrop-blur-sm group overflow-hidden flex flex-col p-0 gap-0">
+                                        <div className="relative aspect-square w-full bg-muted/50 overflow-hidden border-b border-muted-foreground/10">
+                                            {item.image_url ? (
+                                                <Image 
+                                                    src={item.image_url} 
+                                                    alt={getItemTitle(item.caption)}
+                                                    fill
+                                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+                                                    <Package className="w-8 h-8" />
+                                                </div>
+                                            )}
+                                            <div className="absolute top-2 right-2">
+                                                 <Badge variant={item.status === "available" ? "default" : "secondary"} className="capitalize">
+                                                    {item.status}
+                                                 </Badge>
+                                            </div>
                                         </div>
-                                    )}
-                                    <div className="absolute top-2 right-2">
-                                         <Badge variant={item.status === "stored" ? "default" : "secondary"} className="capitalize">
-                                            {item.status}
-                                         </Badge>
-                                    </div>
-                                </div>
-                                 <CardHeader className="pb-2 pt-4 px-4 md:px-6">
-                                    <CardTitle className="text-lg">{item.name}</CardTitle>
-                                    <CardDescription className="flex items-center gap-3 text-xs">
-                                         <div className="flex items-center gap-1">
-                                            <Calendar className="w-3 h-3" /> {item.foundDate}
-                                         </div>
-                                         <div className="flex items-center gap-1">
-                                            <MapPin className="w-3 h-3" /> {item.location}
-                                         </div>
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="flex-grow pb-4 md:pb-6 px-4 md:px-6">
-                                    <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
+                                         <CardHeader className="pb-2 pt-4 px-4 md:px-6">
+                                            <CardTitle className="text-lg">{getItemTitle(item.caption)}</CardTitle>
+                                            <CardDescription className="flex items-center gap-3 text-xs">
+                                                 <div className="flex items-center gap-1">
+                                                    <Calendar className="w-3 h-3" /> {formatDate(item.created_at)}
+                                                 </div>
+                                                 {item.category && (
+                                                     <div className="flex items-center gap-1">
+                                                        <MapPin className="w-3 h-3" /> {item.category}
+                                                     </div>
+                                                 )}
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="flex-grow pb-4 md:pb-6 px-4 md:px-6">
+                                            <p className="text-sm text-muted-foreground line-clamp-2">{item.caption || "No description available"}</p>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
 
-                    <div className="relative z-10 w-full flex justify-center mt-8">
-                        <Button className="gap-2" onClick={() => setIsAddFormOpen(true)}>
-                            <Plus className="w-4 h-4" /> Add Found Item
-                        </Button>
-                    </div>
+                            {items.length === 0 && (
+                                <div className="text-center py-12 text-muted-foreground">
+                                    No items found in this collection.
+                                </div>
+                            )}
+
+                            <div className="relative z-10 w-full flex justify-center mt-8">
+                                <Button className="gap-2" onClick={() => setIsAddFormOpen(true)}>
+                                    <Plus className="w-4 h-4" /> Add Found Item
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </motion.div>
             ) : (
                 <motion.div
@@ -237,34 +228,41 @@ export default function CollectionDetailsPage({ params }: { params: Promise<{ id
                     transition={{ duration: 0.2 }}
                     className="space-y-4"
                 >
-                    {mockInquiries.map((inquiry) => (
-                        <motion.div
-                            key={inquiry.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.2 }}
-                        >
-                            <InquiryCard 
-                                id={inquiry.id}
-                                title={inquiry.item}
-                                description={inquiry.description}
-                                date={inquiry.date}
-                                status={inquiry.status}
-                                imageUrl={inquiry.imageUrl}
-                                userEmail={inquiry.userEmail}
-                                action={
-                                    <Link href="#" className="group flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
-                                        <span>Review</span>
-                                        <ArrowLeft className="w-3.5 h-3.5 rotate-180 transition-transform group-hover:translate-x-1" />
-                                    </Link>
-                                }
-                            />
-                        </motion.div>
-                    ))}
-                    {mockInquiries.length === 0 && (
-                        <div className="text-center py-12 text-muted-foreground">
-                            No inquiries found for this collection.
+                    {isLoadingInquiries ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                         </div>
+                    ) : (
+                        <>
+                            {inquiries.map((inquiry) => (
+                                <motion.div
+                                    key={inquiry.id}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                >
+                                    <InquiryCard 
+                                        id={inquiry.id}
+                                        title={getInquiryTitle(inquiry.description)}
+                                        description={inquiry.description || ""}
+                                        date={formatDate(inquiry.created_at)}
+                                        status={inquiry.status as InquiryStatus}
+                                        imageUrl={inquiry.image_url || undefined}
+                                        action={
+                                            <Link href={`/assistant/inquiries/${inquiry.id}`} className="group flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
+                                                <span>Review</span>
+                                                <ArrowLeft className="w-3.5 h-3.5 rotate-180 transition-transform group-hover:translate-x-1" />
+                                            </Link>
+                                        }
+                                    />
+                                </motion.div>
+                            ))}
+                            {inquiries.length === 0 && (
+                                <div className="text-center py-12 text-muted-foreground">
+                                    No inquiries found.
+                                </div>
+                            )}
+                        </>
                     )}
                 </motion.div>
             )}

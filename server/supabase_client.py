@@ -116,3 +116,44 @@ def update_match_status(match_id: str, status: str, reviewed_by: Optional[str] =
 def get_match(match_id: str):
     """Get a match by ID."""
     return supabase.table("matches").select("*, inquiries(*), items(*)").eq("id", match_id).single().execute()
+
+
+# ============== Collections Operations ==============
+
+def create_collection(name: str):
+    """Create a new collection."""
+    return supabase.table("collections").insert({
+        "name": name
+    }).execute()
+
+
+def get_collection(collection_id: str):
+    """Get a collection by ID with item count."""
+    result = supabase.table("collections").select("*").eq("id", collection_id).single().execute()
+    # Get item count
+    items_result = supabase.table("items").select("id", count="exact").eq("collection_id", collection_id).execute()
+    result.data["item_count"] = items_result.count if items_result.count else 0
+    return result
+
+
+def get_collections():
+    """Get all collections with item counts."""
+    result = supabase.table("collections").select("*").order("created_at", desc=True).execute()
+    # Add item counts for each collection
+    for c in result.data:
+        items_result = supabase.table("items").select("id", count="exact").eq("collection_id", c["id"]).execute()
+        c["item_count"] = items_result.count if items_result.count else 0
+    return result
+
+
+def delete_collection(collection_id: str):
+    """Delete a collection (unlinks items, doesn't delete them)."""
+    # First unlink all items from this collection
+    supabase.table("items").update({"collection_id": None}).eq("collection_id", collection_id).execute()
+    # Then delete the collection
+    return supabase.table("collections").delete().eq("id", collection_id).execute()
+
+
+def get_items_by_collection(collection_id: str):
+    """Get all items in a collection."""
+    return supabase.table("items").select("*").eq("collection_id", collection_id).order("created_at", desc=True).execute()

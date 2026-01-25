@@ -9,11 +9,12 @@ import requests
 from config import SEARCH_WEIGHTS
 from models import (
     ItemResponse, ItemUpdate, ItemListResponse, ItemStatus,
-    InquiryResponse, InquiryListResponse, InquiryStatus,
+    InquiryResponse, InquiryListResponse, InquiryStatus, InquiryStatusUpdate,
     MatchResponse, MatchListResponse, MatchStatus, MatchScores,
     SearchResult, SearchResponse,
     VerificationQuestionsResponse,
-    SystemStats, CollectionStats, HealthResponse
+    SystemStats, CollectionStats, HealthResponse,
+    CollectionResponse, CollectionListResponse, CollectionCreate
 )
 import supabase_client as db
 import milvus
@@ -96,7 +97,8 @@ async def get_stats():
 @app.post("/inventory/items", response_model=ItemResponse)
 async def create_item(
     image: UploadFile = File(...),
-    category: Optional[str] = Form(None)
+    category: Optional[str] = Form(None),
+    collection_id: Optional[str] = Form(None)
 ):
     """
     Add a new item to the inventory.
@@ -109,6 +111,7 @@ async def create_item(
     5. Insert into all 3 Milvus collections
     6. Insert metadata into Supabase
     """
+    print(f"[CREATE ITEM] category={category}, collection_id={collection_id}")
     try:
         # Read image bytes
         image_bytes = await image.read()
@@ -143,14 +146,18 @@ async def create_item(
         )
         
         # 6. Insert into Supabase
-        result = db.supabase.table("items").insert({
+        insert_data = {
             "id": item_id,
             "image_url": image_url,
             "caption": caption,
             "extracted_text": extracted_text,
             "category": category,
+            "collection_id": collection_id,
             "status": "available"
-        }).execute()
+        }
+        print(f"[CREATE ITEM] Inserting: {insert_data}")
+        result = db.supabase.table("items").insert(insert_data).execute()
+        print(f"[CREATE ITEM] Result: {result.data}")
         
         item_data = result.data[0]
         return ItemResponse(
@@ -159,6 +166,7 @@ async def create_item(
             caption=item_data["caption"],
             extracted_text=item_data["extracted_text"],
             category=item_data["category"],
+            collection_id=item_data.get("collection_id"),
             status=ItemStatus(item_data["status"]),
             created_at=item_data["created_at"],
             updated_at=item_data["updated_at"]
@@ -184,6 +192,7 @@ async def list_items(
                 caption=item.get("caption"),
                 extracted_text=item.get("extracted_text"),
                 category=item.get("category"),
+                collection_id=item.get("collection_id"),
                 status=ItemStatus(item["status"]),
                 created_at=item["created_at"],
                 updated_at=item["updated_at"]
@@ -207,6 +216,7 @@ async def get_item(item_id: str):
             caption=item.get("caption"),
             extracted_text=item.get("extracted_text"),
             category=item.get("category"),
+            collection_id=item.get("collection_id"),
             status=ItemStatus(item["status"]),
             created_at=item["created_at"],
             updated_at=item["updated_at"]
@@ -224,6 +234,8 @@ async def update_item(item_id: str, update: ItemUpdate):
             updates["category"] = update.category
         if update.status is not None:
             updates["status"] = update.status.value
+        if update.collection_id is not None:
+            updates["collection_id"] = update.collection_id
         
         if updates:
             db.update_item(item_id, updates)
@@ -244,6 +256,93 @@ async def delete_item(item_id: str):
         db.delete_item(item_id)
         
         return {"message": "Item deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== Collections Management ==============
+
+@app.get("/collections", response_model=CollectionListResponse)
+async def list_collections():
+    """List all collections with item counts."""
+    try:
+        result = db.get_collections()
+        collections = [
+            CollectionResponse(
+                id=c["id"],
+                name=c["name"],
+                created_at=c["created_at"],
+                item_count=c.get("item_count", 0)
+            )
+            for c in result.data
+        ]
+        return CollectionListResponse(collections=collections, total=len(collections))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/collections", response_model=CollectionResponse)
+async def create_collection(collection: CollectionCreate):
+    """Create a new collection."""
+    try:
+        result = db.create_collection(collection.name)
+        c = result.data[0]
+        return CollectionResponse(
+            id=c["id"],
+            name=c["name"],
+            created_at=c["created_at"],
+            item_count=0
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/collections/{collection_id}", response_model=CollectionResponse)
+async def get_collection(collection_id: str):
+    """Get a specific collection by ID."""
+    try:
+        result = db.get_collection(collection_id)
+        c = result.data
+        return CollectionResponse(
+            id=c["id"],
+            name=c["name"],
+            created_at=c["created_at"],
+            item_count=c.get("item_count", 0)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+
+@app.get("/collections/{collection_id}/items", response_model=ItemListResponse)
+async def get_collection_items(collection_id: str):
+    """Get all items in a collection."""
+    try:
+        result = db.get_items_by_collection(collection_id)
+        items = [
+            ItemResponse(
+                id=item["id"],
+                image_url=item["image_url"],
+                caption=item.get("caption"),
+                extracted_text=item.get("extracted_text"),
+                category=item.get("category"),
+                collection_id=item.get("collection_id"),
+                status=ItemStatus(item["status"]),
+                created_at=item["created_at"],
+                updated_at=item["updated_at"]
+            )
+            for item in result.data
+        ]
+        return ItemListResponse(items=items, total=len(items))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/collections/{collection_id}")
+async def delete_collection(collection_id: str):
+    """Delete a collection (items are unlinked, not deleted)."""
+    try:
+        db.delete_collection(collection_id)
+        return {"message": "Collection deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -361,11 +460,60 @@ async def get_inquiry_matches(inquiry_id: str):
                 combined_score=m["combined_score"],
                 status=MatchStatus(m["status"]),
                 reviewed_by=m.get("reviewed_by"),
-                created_at=m["created_at"]
+                created_at=m["created_at"],
+                item=ItemResponse(
+                    id=m["items"]["id"],
+                    image_url=m["items"]["image_url"],
+                    caption=m["items"].get("caption"),
+                    extracted_text=m["items"].get("extracted_text"),
+                    category=m["items"].get("category"),
+                    collection_id=m["items"].get("collection_id"),
+                    status=ItemStatus(m["items"]["status"]),
+                    created_at=m["items"]["created_at"],
+                    updated_at=m["items"]["updated_at"]
+                ) if m.get("items") else None
             )
             for m in result.data
         ]
         return MatchListResponse(matches=matches, total=len(matches))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== Admin/Assistant Endpoints ==============
+
+@app.get("/admin/inquiries", response_model=InquiryListResponse)
+async def list_all_inquiries(
+    limit: int = 100,
+    offset: int = 0,
+    status: Optional[str] = None
+):
+    """List all inquiries for admin/assistant review (no user filtering)."""
+    try:
+        result = db.get_inquiries(limit=limit, offset=offset, status=status, user_id=None)
+        inquiries = [
+            InquiryResponse(
+                id=inq["id"],
+                user_id=inq.get("user_id"),
+                image_url=inq.get("image_url"),
+                description=inq.get("description"),
+                status=InquiryStatus(inq["status"]),
+                created_at=inq["created_at"],
+                updated_at=inq["updated_at"]
+            )
+            for inq in result.data
+        ]
+        return InquiryListResponse(inquiries=inquiries, total=len(inquiries))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/inquiries/{inquiry_id}/status")
+async def update_inquiry_status_endpoint(inquiry_id: str, update: InquiryStatusUpdate):
+    """Update inquiry status directly."""
+    try:
+        db.update_inquiry_status(inquiry_id, update.status.value)
+        return {"message": "Status updated", "inquiry_id": inquiry_id, "status": update.status.value}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -455,6 +603,7 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
                     caption=item_data.get("caption"),
                     extracted_text=item_data.get("extracted_text"),
                     category=item_data.get("category"),
+                    collection_id=item_data.get("collection_id"),
                     status=ItemStatus(item_data["status"]),
                     created_at=item_data["created_at"],
                     updated_at=item_data["updated_at"]
@@ -663,6 +812,7 @@ async def test_search(
                     caption=item_data.get("caption"),
                     extracted_text=item_data.get("extracted_text"),
                     category=item_data.get("category"),
+                    collection_id=item_data.get("collection_id"),
                     status=ItemStatus(item_data["status"]),
                     created_at=item_data["created_at"],
                     updated_at=item_data["updated_at"]

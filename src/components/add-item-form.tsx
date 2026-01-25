@@ -2,11 +2,10 @@
 
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Upload, MapPin, Type, Loader2 } from "lucide-react";
+import { X, Upload, MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
@@ -21,12 +20,10 @@ import Image from "next/image";
 interface AddItemFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: ItemFormData) => void;
+  onSubmit: (data: ItemFormData) => Promise<void>;
 }
 
 export interface ItemFormData {
-  name: string;
-  description: string;
   foundDate: Date | undefined;
   location: string;
   imageFile?: File;
@@ -35,8 +32,6 @@ export interface ItemFormData {
 
 export function AddItemForm({ isOpen, onClose, onSubmit }: AddItemFormProps) {
   const [formData, setFormData] = useState<ItemFormData>({
-    name: "",
-    description: "",
     foundDate: new Date(),
     location: "",
   });
@@ -65,23 +60,23 @@ export function AddItemForm({ isOpen, onClose, onSubmit }: AddItemFormProps) {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Simulate upload delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    onSubmit({
-      ...formData,
-      imageUrl: imagePreview || undefined
-    });
-    
-    setIsSubmitting(false);
-    resetForm();
-    onClose();
+    try {
+      await onSubmit({
+        ...formData,
+        imageUrl: imagePreview || undefined
+      });
+      
+      resetForm();
+      onClose();
+    } catch (error) {
+      console.error("Failed to add item:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
     setFormData({
-      name: "",
-      description: "",
       foundDate: new Date(),
       location: "",
     });
@@ -125,7 +120,7 @@ export function AddItemForm({ isOpen, onClose, onSubmit }: AddItemFormProps) {
               <div className="flex items-center justify-between p-6">
                 <div>
                   <h2 className="text-xl font-semibold tracking-tight">Add Found Item</h2>
-                  <p className="text-sm text-muted-foreground">Enter details about the item you found.</p>
+                  <p className="text-sm text-muted-foreground">Upload a photo and AI will generate the description.</p>
                 </div>
                 <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
                   <X className="h-4 w-4" />
@@ -200,37 +195,6 @@ export function AddItemForm({ isOpen, onClose, onSubmit }: AddItemFormProps) {
                     />
                 </div>
 
-                {/* Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-base font-medium">Item Name</Label>
-                  <div className="relative">
-                    <Input
-                      id="name"
-                      name="name"
-                      placeholder="e.g. Blue Umbrella"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      className="pl-9 bg-background/50 focus:bg-background transition-colors"
-                      required
-                    />
-                    <Type className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <Label htmlFor="description" className="text-base font-medium">Description</Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    placeholder="Describe the item, including any distinctive features..."
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    className="min-h-[120px] resize-y bg-background/50 focus:bg-background transition-colors"
-                    required
-                  />
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   {/* Date */}
                   <div className="space-y-2">
@@ -292,7 +256,7 @@ export function AddItemForm({ isOpen, onClose, onSubmit }: AddItemFormProps) {
                 <Button variant="outline" onClick={onClose} type="button">
                   Cancel
                 </Button>
-                <Button onClick={handleSubmit} disabled={isSubmitting || !formData.name || !formData.description}>
+                <Button onClick={handleSubmit} disabled={isSubmitting || !formData.imageFile}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
