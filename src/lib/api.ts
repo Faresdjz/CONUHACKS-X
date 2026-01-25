@@ -119,6 +119,59 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   return {};
 }
 
+// ============== Organization Check ==============
+
+export async function checkUserOrganization(): Promise<{ hasOrg: boolean; error?: string }> {
+  /**
+   * Check if the current user has an organization.
+   * Checks the 'users' table for a non-null 'organization' field.
+   */
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    console.log("[checkUserOrganization] User:", user?.id, user?.email);
+    
+    if (!user) {
+      console.log("[checkUserOrganization] No user found");
+      return { hasOrg: false, error: "Not logged in" };
+    }
+    
+    // Check if user has an organization in the users table
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('organization')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    console.log("[checkUserOrganization] Users query result:", JSON.stringify({ userData, error }, null, 2));
+    
+    if (error) {
+      console.log("[checkUserOrganization] Query error:", error.message, error.code);
+      // If it's an RLS error or permission issue, allow access (don't block)
+      if (error.code === 'PGRST116' || error.message.includes('permission') || error.message.includes('RLS')) {
+        console.log("[checkUserOrganization] RLS/permission issue - allowing access");
+        return { hasOrg: true };
+      }
+      return { hasOrg: false, error: error.message };
+    }
+    
+    if (!userData) {
+      console.log("[checkUserOrganization] No user record found");
+      return { hasOrg: false, error: "No user record found" };
+    }
+    
+    const hasOrg = !!userData.organization && userData.organization.trim() !== '';
+    console.log("[checkUserOrganization] Organization value:", userData.organization, "| Has org:", hasOrg);
+    
+    return { hasOrg };
+  } catch (err) {
+    console.error("[checkUserOrganization] Error:", err);
+    // Default to allowing access if there's an unexpected error
+    return { hasOrg: true };
+  }
+}
+
 // ============== User Inquiry Functions ==============
 
 export async function createInquiry(description: string, image?: File, collectionName?: string) {

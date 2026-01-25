@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, ArrowLeft, Loader2, FolderOpen, ChevronRight } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Loader2, FolderOpen, ChevronRight, Mail, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -19,13 +19,18 @@ import {
   getCollections, 
   createCollection as createCollectionAPI, 
   deleteCollection as deleteCollectionAPI,
-  Collection 
+  Collection,
+  checkUserOrganization
 } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 
 function formatDate(isoDate: string): string {
   const date = new Date(isoDate);
   return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
+
+// Email for organization confirmation requests
+const ADMIN_EMAIL = "admin@ilostit.com"; // Change this to your admin email
 
 export default function CollectionsPage() {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -34,12 +39,42 @@ export default function CollectionsPage() {
   const [newCollectionName, setNewCollectionName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [hoveredCollection, setHoveredCollection] = useState<string | null>(null);
+  const [showNoOrgDialog, setShowNoOrgDialog] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    getCollections()
-      .then((data) => setCollections(data.collections))
-      .catch((err) => console.error("Failed to fetch collections:", err))
-      .finally(() => setIsLoading(false));
+    const checkOrganizationAndFetchCollections = async () => {
+      try {
+        // Get current user
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          setUserEmail(user.email || null);
+          
+          // Check if user has an organization
+          const result = await checkUserOrganization();
+          console.log("[AssistantPage] Organization check result:", result);
+          
+          if (!result.hasOrg) {
+            console.log("[AssistantPage] User has no organization, showing dialog");
+            setShowNoOrgDialog(true);
+            setIsLoading(false);
+            return;
+          }
+        }
+        
+        // Fetch collections if user has organization
+        const data = await getCollections();
+        setCollections(data.collections);
+      } catch (err) {
+        console.error("Failed to fetch collections:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    checkOrganizationAndFetchCollections();
   }, []);
 
   const handleCreateCollection = async (e: React.FormEvent) => {
@@ -218,6 +253,43 @@ export default function CollectionsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* No Organization Dialog */}
+      <Dialog open={showNoOrgDialog} onOpenChange={setShowNoOrgDialog}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader className="text-center sm:text-center">
+            <div className="mx-auto mb-4 w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center">
+              <ShieldAlert className="w-6 h-6 text-amber-500" />
+            </div>
+            <DialogTitle className="text-xl">Organization Required</DialogTitle>
+            <DialogDescription className="text-center">
+              Your account is not linked to an organization. To access the assistant portal, you need to be confirmed by an administrator.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 text-center text-sm text-muted-foreground">
+            Please contact the administrator to request access. Include your email address in the request.
+            {userEmail && (
+              <p className="mt-2 font-medium text-foreground">{userEmail}</p>
+            )}
+          </div>
+          <DialogFooter className="sm:justify-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Go Back
+              </Link>
+            </Button>
+            <Button asChild>
+              <a 
+                href={`mailto:${ADMIN_EMAIL}?subject=Organization Access Request&body=Hello,%0D%0A%0D%0AI would like to request access to the assistant portal.%0D%0A%0D%0AMy email: ${userEmail || '[your email]'}%0D%0A%0D%0AThank you.`}
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                Contact Admin
+              </a>
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </main>
