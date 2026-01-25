@@ -11,3 +11,4 @@ pydantic
 supabase
 requests
 PyJWT[crypto]
+sentence-transformers
