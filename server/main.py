@@ -623,19 +623,25 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
         # Merge and rank results
         ranked_results = merge_and_rank(results, SEARCH_WEIGHTS)
         
-        # Filter results to only include items from the same collection
-        if inquiry_collection_id:
-            filtered_results = []
-            for r in ranked_results:
-                try:
-                    item_result = db.get_item(r["item_id"])
-                    if item_result.data and item_result.data.get("collection_id") == inquiry_collection_id:
+        # Filter results to only include items from the same collection and exclude taken items
+        filtered_results = []
+        for r in ranked_results:
+            try:
+                item_result = db.get_item(r["item_id"])
+                if item_result.data:
+                    item_status = item_result.data.get("status")
+                    # Exclude items that are matched or claimed (taken)
+                    if item_status in ["matched", "claimed"]:
+                        continue
+                    # If collection_id is specified, only include items from that collection
+                    if inquiry_collection_id:
+                        if item_result.data.get("collection_id") == inquiry_collection_id:
+                            filtered_results.append(r)
+                    else:
                         filtered_results.append(r)
-                except:
-                    pass
-            ranked_results = filtered_results[:top_k]
-        else:
-            ranked_results = ranked_results[:top_k]
+            except:
+                pass
+        ranked_results = filtered_results[:top_k]
         
         # Update inquiry status
         db.update_inquiry_status(inquiry_id, "under_review")
@@ -999,19 +1005,25 @@ async def search_with_follow_up_responses(inquiry_id: str, top_k: int = 10):
         # Merge and rank results
         ranked_results = merge_and_rank(results, SEARCH_WEIGHTS)
         
-        # Filter results to only include items from the same collection
-        if inquiry_collection_id:
-            filtered_results = []
-            for r in ranked_results:
-                try:
-                    item_result = db.get_item(r["item_id"])
-                    if item_result.data and item_result.data.get("collection_id") == inquiry_collection_id:
+        # Filter results to only include items from the same collection and exclude taken items
+        filtered_results = []
+        for r in ranked_results:
+            try:
+                item_result = db.get_item(r["item_id"])
+                if item_result.data:
+                    item_status = item_result.data.get("status")
+                    # Exclude items that are matched or claimed (taken)
+                    if item_status in ["matched", "claimed"]:
+                        continue
+                    # If collection_id is specified, only include items from that collection
+                    if inquiry_collection_id:
+                        if item_result.data.get("collection_id") == inquiry_collection_id:
+                            filtered_results.append(r)
+                    else:
                         filtered_results.append(r)
-                except:
-                    pass
-            ranked_results = filtered_results[:top_k]
-        else:
-            ranked_results = ranked_results[:top_k]
+            except:
+                pass
+        ranked_results = filtered_results[:top_k]
         
         # Update inquiry status to matched if we have results
         if ranked_results:
