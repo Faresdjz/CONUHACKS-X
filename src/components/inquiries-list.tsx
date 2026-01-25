@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { getInquiries, BackendInquiry } from "@/lib/api";
 import { InquiryCard, InquiryStatus } from "@/components/inquiry-card";
 
@@ -15,6 +15,8 @@ interface Inquiry {
   date: string;
   status: InquiryStatus;
   imageUrl?: string;
+  category?: string;
+  location?: string;
 }
 
 function formatDate(isoDate: string): string {
@@ -38,6 +40,8 @@ function mapBackendInquiry(backend: BackendInquiry): Inquiry {
     date: formatDate(backend.created_at),
     status: backend.status as InquiryStatus,
     imageUrl: backend.image_url || undefined,
+    // Note: category and location would come from backend if available
+    // For now, these are optional and will be undefined
   };
 }
 
@@ -81,7 +85,7 @@ export function InquiriesList() {
       <div className="w-full text-center py-12 space-y-6">
         <p className="text-muted-foreground">No inquiries yet. Submit one to get started!</p>
         <Button asChild>
-          <Link href="/submit-inquiry">
+          <Link href="/inquiries">
             Report Lost Item <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
           </Link>
         </Button>
@@ -90,17 +94,14 @@ export function InquiriesList() {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full">
       {inquiries.map((inquiry, index) => {
         const isFollowUp = inquiry.status === "follow_up";
+        // Only provide href for follow-up inquiries (the only route that exists)
+        const href = isFollowUp ? `/inquiries/${inquiry.id}/follow-up` : undefined;
 
         return (
-          <motion.div
-            key={inquiry.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1, duration: 0.5 }}
-          >
+          <div key={inquiry.id}>
             <InquiryCard 
               id={inquiry.id}
               title={inquiry.item}
@@ -108,18 +109,14 @@ export function InquiriesList() {
               date={inquiry.date}
               status={inquiry.status}
               imageUrl={inquiry.imageUrl}
-              action={
-                isFollowUp && (
-                  <Link href={`/inquiries/${inquiry.id}/follow-up`}>
-                    <div className="flex items-center gap-1.5 text-sm font-medium text-white group-hover:text-white/80 transition-colors">
-                      <span>Resolve</span>
-                      <ArrowLeft className="w-3.5 h-3.5 rotate-180 transition-transform group-hover:translate-x-1" />
-                    </div>
-                  </Link>
-                )
-              }
+              category={inquiry.category}
+              location={inquiry.location}
+              href={href}
             />
-          </motion.div>
+            {index < inquiries.length - 1 && (
+              <Separator className="bg-border/10" />
+            )}
+          </div>
         );
       })}
     </div>

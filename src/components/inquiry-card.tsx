@@ -1,7 +1,8 @@
 "use client";
 
-import { Clock, CheckCircle2, XCircle, AlertCircle, Search, LucideIcon } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, AlertCircle, Search, LucideIcon, ChevronRight, Tag } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -16,59 +17,75 @@ interface InquiryCardProps {
   imageUrl?: string;
   imageAlt?: string;
   userEmail?: string;
+  category?: string;
+  location?: string;
   action?: React.ReactNode;
   className?: string;
+  href?: string;
 }
 
 const statusConfig: Record<InquiryStatus, { label: string; className: string; icon: LucideIcon }> = {
   submitted: { 
     label: "Submitted", 
-    className: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+    className: "bg-secondary/20 text-secondary-foreground border-secondary/30",
     icon: Clock
   },
   under_review: { 
-    label: "Under Review", 
-    className: "bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500/25 border-orange-200 dark:border-orange-800",
+    label: "Reviewing", 
+    className: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
     icon: Search
   },
   pending: { 
     label: "Pending", 
-    className: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+    className: "bg-secondary/20 text-secondary-foreground border-secondary/30",
     icon: Clock
   },
   reviewed: { 
     label: "Reviewed", 
-    className: "bg-blue-500/15 text-blue-600 dark:text-blue-400 hover:bg-blue-500/25 border-blue-200 dark:border-blue-800",
+    className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
     icon: Search
   },
   follow_up: { 
     label: "Follow Up", 
-    className: "bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500/25 border-orange-200 dark:border-orange-800",
+    className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
     icon: AlertCircle
   },
   resolved: { 
     label: "Resolved", 
-    className: "bg-green-500/15 text-green-600 dark:text-green-400 hover:bg-green-500/25 border-green-200 dark:border-green-800",
+    className: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
     icon: CheckCircle2
   },
   matched: { 
     label: "Matched", 
-    className: "bg-green-500/15 text-green-600 dark:text-green-400 hover:bg-green-500/25 border-green-200 dark:border-green-800",
+    className: "bg-primary/10 text-primary border-primary/20",
     icon: CheckCircle2
   },
   denied: { 
     label: "Denied", 
-    className: "bg-destructive/15 text-destructive hover:bg-destructive/25 border-destructive/20",
+    className: "bg-destructive/10 text-destructive border-destructive/20",
     icon: XCircle
   },
   rejected: { 
     label: "Rejected", 
-    className: "bg-destructive/15 text-destructive hover:bg-destructive/25 border-destructive/20",
+    className: "bg-destructive/10 text-destructive border-destructive/20",
     icon: XCircle
   },
 };
 
+// Format description to sentence case (first letter uppercase)
+function toSentenceCase(text: string): string {
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+}
+
+// Check if description equals category (case-insensitive)
+function isDescriptionEqualToCategory(description: string | null, category: string | null | undefined): boolean {
+  if (!description || !category) return false;
+  return description.toLowerCase().trim() === category.toLowerCase().trim();
+}
+
 export function InquiryCard({
+  id,
   title,
   description,
   date,
@@ -76,55 +93,109 @@ export function InquiryCard({
   imageUrl,
   imageAlt,
   userEmail,
+  category,
+  location,
   action,
-  className
+  className,
+  href
 }: InquiryCardProps) {
   const config = statusConfig[status];
   const StatusIcon = config.icon;
-  const isInteractive = !!action || status === "follow_up";
+  const isClickable = !!href;
+  
+  // Format description for display
+  const displayDescription = toSentenceCase(description || title);
+  const showCategoryChip = category; // Always show category chip if available, even if same as description
 
-  return (
-    <div className={cn("group flex flex-row gap-5 items-start p-5 rounded-2xl border border-border/50 backdrop-blur-sm hover:border-border/80 transition-all duration-300", className)}>
-      <div className="w-20 h-20 rounded-lg bg-muted/50 flex-shrink-0 overflow-hidden relative border border-border/50">
+  const rowContent = (
+    <div
+      className={cn(
+        "w-full flex items-center gap-3 p-3 rounded-lg border transition-all text-left",
+        isClickable && "hover:border-border/40 hover:bg-muted/5 active:bg-muted/10 cursor-pointer",
+        !isClickable && "cursor-default",
+        "border-border/20 bg-background",
+        className
+      )}
+    >
+      {/* Left: Thumbnail */}
+      <div className="relative w-14 h-14 rounded-md overflow-hidden bg-muted/10 border border-border/20 shrink-0">
         {imageUrl ? (
           <Image 
             src={imageUrl} 
-            alt={imageAlt || title}
+            alt={imageAlt || displayDescription}
             fill
-            className={cn(
-               "object-cover transition-transform duration-500",
-               isInteractive ? "group-hover:scale-105" : ""
-            )}
+            className="object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
-            <Search className="w-8 h-8" />
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground/20">
+            <Search className="w-6 h-6" />
           </div>
         )}
       </div>
 
+      {/* Middle: Content */}
       <div className="flex-1 min-w-0 space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-base font-semibold pr-2 leading-snug">{title}</h3>
-          <Badge variant="outline" className={cn("flex-shrink-0 w-8 sm:w-28 h-7 sm:h-auto justify-center flex items-center gap-1 p-0 sm:px-2 sm:py-0.5 text-[10px] uppercase tracking-wide border", config.className)}>
-            <StatusIcon className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-            <span className="hidden sm:inline">{config.label}</span>
-          </Badge>
+        {/* Title + Category */}
+        <div className="flex items-start gap-2 flex-wrap">
+          <h3 className="text-sm font-medium text-foreground leading-snug line-clamp-2">
+            {displayDescription}
+          </h3>
+          {showCategoryChip && (
+            <Badge 
+              variant="outline" 
+              className="text-[10px] px-1.5 py-0 h-5 shrink-0 bg-muted/30 border-border/30 text-muted-foreground"
+            >
+              <Tag className="w-2.5 h-2.5 mr-1" />
+              {category}
+            </Badge>
+          )}
         </div>
-        <p className="text-muted-foreground line-clamp-2 text-sm">{description}</p>
-        <div className={cn("pt-2 flex items-center text-xs text-muted-foreground/60 mt-1", action ? "justify-between" : "justify-start gap-2")}>
-          <div className="flex items-center gap-2">
-             <span>{date}</span>
-             {userEmail && (
-                 <>
-                    <span>•</span>
-                    <span>{userEmail}</span>
-                 </>
-             )}
+
+        {/* Meta Line */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+          <span>{date}</span>
+          {location && (
+            <>
+              <span>•</span>
+              <span>{location}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Right: Status + Chevron */}
+      <div className="flex items-center gap-2 shrink-0">
+        <Badge 
+          variant="outline" 
+          className={cn(
+            "text-[10px] px-1.5 py-0 h-5 flex items-center gap-1",
+            config.className
+          )}
+        >
+          <StatusIcon className="w-2.5 h-2.5" />
+          <span className="hidden sm:inline">{config.label}</span>
+        </Badge>
+        {isClickable && (
+          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+        )}
+        {action && (
+          <div onClick={(e) => e.stopPropagation()}>
+            {action}
           </div>
-          {action}
-        </div>
+        )}
       </div>
     </div>
   );
+
+  // Only wrap in Link if href is provided
+  if (href) {
+    return (
+      <Link href={href} className={cn("block w-full", className)}>
+        {rowContent}
+      </Link>
+    );
+  }
+
+  // Otherwise, return as non-clickable div
+  return rowContent;
 }

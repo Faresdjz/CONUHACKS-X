@@ -40,4 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# images
+/server/dataset/*
+
+
 __pycache__/

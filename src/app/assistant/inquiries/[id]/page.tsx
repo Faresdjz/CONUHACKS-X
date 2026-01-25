@@ -1,43 +1,31 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { motion } from "framer-motion";
 import { 
   ArrowLeft, 
-  Clock, 
   CheckCircle2, 
   XCircle, 
-  AlertCircle, 
-  Search, 
-  LucideIcon, 
-  Loader2,
-  FileSearch,
   Check,
   X,
   Sparkles,
   ImageIcon,
   FileText,
-  Zap,
-  Eye,
-  Info,
+  Loader2,
   MessageCircleQuestion,
   Plus,
   Send,
-  Trash2
+  Trash2,
+  ChevronRight,
+  ChevronDown,
+  Search,
+  Eye
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -46,11 +34,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import Image from "next/image";
 import { 
   getInquiry, 
   getInquiryMatches, 
@@ -84,68 +69,59 @@ function formatDate(isoDate: string): string {
   });
 }
 
-const statusConfig: Record<InquiryStatus, { label: string; className: string; icon: LucideIcon }> = {
+function formatDateShort(isoDate: string): string {
+  const date = new Date(isoDate);
+  return date.toLocaleDateString("en-US", { 
+    month: "short", 
+    day: "numeric"
+  });
+}
+
+const statusConfig: Record<InquiryStatus, { label: string; className: string }> = {
   submitted: { 
     label: "Submitted", 
-    className: "bg-secondary text-secondary-foreground",
-    icon: Clock
+    className: "bg-secondary/20 text-secondary-foreground border-secondary/30",
   },
   under_review: {
-    label: "Under Review",
-    className: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
-    icon: FileSearch
+    label: "Reviewing",
+    className: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
   },
   reviewed: { 
     label: "Reviewed", 
-    className: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800",
-    icon: Search
+    className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
   },
   follow_up: { 
     label: "Follow Up", 
-    className: "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800",
-    icon: AlertCircle
+    className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
   },
   matched: {
     label: "Matched",
-    className: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800",
-    icon: CheckCircle2
+    className: "bg-primary/10 text-primary border-primary/20",
   },
   resolved: { 
     label: "Resolved", 
-    className: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800",
-    icon: CheckCircle2
+    className: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
   },
   denied: { 
     label: "Denied", 
-    className: "bg-destructive/15 text-destructive border-destructive/20",
-    icon: XCircle
+    className: "bg-destructive/10 text-destructive border-destructive/20",
   },
 };
 
 const matchStatusConfig: Record<MatchStatus, { label: string; className: string }> = {
   pending: {
     label: "Pending",
-    className: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
+    className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
   },
   approved: {
     label: "Approved",
-    className: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800",
+    className: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
   },
   rejected: {
     label: "Rejected",
-    className: "bg-destructive/15 text-destructive border-destructive/20",
+    className: "bg-destructive/10 text-destructive border-destructive/20",
   },
 };
-
-const statusOptions: InquiryStatus[] = [
-  "submitted",
-  "under_review",
-  "reviewed",
-  "follow_up",
-  "matched",
-  "resolved",
-  "denied",
-];
 
 export default function InquiryReviewPage({ params }: PageProps) {
   const { id } = use(params);
@@ -158,6 +134,7 @@ export default function InquiryReviewPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
   
   // Follow-up state
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
@@ -203,16 +180,11 @@ export default function InquiryReviewPage({ params }: PageProps) {
   const handleTriggerSearch = async () => {
     setSearchLoading(true);
     try {
-      // Set status to under_review while searching
       await updateInquiryStatus(id, "under_review");
       setInquiry(prev => prev ? { ...prev, status: "under_review" } : null);
-      
-      // Trigger the search
       await triggerSearch(id);
       const matchesData = await getInquiryMatches(id);
       setMatches(matchesData.matches);
-      
-      // Auto-transition to matched if matches found
       if (matchesData.matches.length > 0) {
         await updateInquiryStatus(id, "matched");
         setInquiry(prev => prev ? { ...prev, status: "matched" } : null);
@@ -229,7 +201,6 @@ export default function InquiryReviewPage({ params }: PageProps) {
     try {
       if (action === "approve") {
         await approveMatch(matchId);
-        // Auto-resolve the inquiry when a match is confirmed
         await updateInquiryStatus(id, "resolved");
         setInquiry(prev => prev ? { ...prev, status: "resolved" } : null);
       } else {
@@ -254,854 +225,605 @@ export default function InquiryReviewPage({ params }: PageProps) {
 
   if (error || !inquiry) {
     return (
-      <main className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+      <main className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-6">
         <p className="text-destructive">{error || "Inquiry not found"}</p>
         <Button asChild variant="outline">
-          <Link href="/assistant">Back to Dashboard</Link>
+          <Link href="/assistant">Back to Portal</Link>
         </Button>
       </main>
     );
   }
 
   const status = statusConfig[inquiry.status];
-  const StatusIcon = status.icon;
+  const hasMatches = matches.length > 0;
+  const showMatches = inquiry.status === "matched" || inquiry.status === "under_review" || hasMatches;
+  const showFollowUp = inquiry.status === "follow_up" || inquiry.status === "matched";
+
+  // Get title from description (first few words)
+  const getTitle = () => {
+    if (!inquiry.description) return "Lost Item";
+    const words = inquiry.description.split(" ");
+    if (words.length <= 5) return inquiry.description;
+    return words.slice(0, 5).join(" ") + "...";
+  };
+
+  // Determine if there are actionable buttons
+  const hasActions = inquiry.status === "submitted" || 
+                     inquiry.status === "matched" || 
+                     inquiry.status === "follow_up" ||
+                     inquiry.status === "reviewed";
 
   return (
-    <ScrollArea className="h-screen">
-    <main className="min-h-screen bg-background relative flex flex-col items-center pt-28 pb-12 px-4 md:px-6">
-      {/* Background Elements */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-accent/5 z-0" />
-      <div className="absolute top-0 left-0 w-full h-96 bg-accent/10 blur-[150px] rounded-full mix-blend-screen pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-full h-96 bg-purple-500/10 blur-[150px] rounded-full mix-blend-screen pointer-events-none" />
+    <main className="min-h-screen bg-background flex flex-col">
+      {/* Top Bar - Fixed */}
+      <nav className="border-b border-border/10 bg-background/95 backdrop-blur-sm sticky top-0 z-20">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Button variant="ghost" size="icon" asChild className="h-8 w-8 shrink-0">
+                <Link href="/assistant">
+                  <ArrowLeft className="w-4 h-4" />
+                </Link>
+              </Button>
+              <h1 className="text-base font-medium text-foreground truncate">Inquiry</h1>
+            </div>
+            <Badge variant="outline" className={`shrink-0 text-xs px-2 py-0.5 ${status.className}`}>
+              {status.label}
+            </Badge>
+          </div>
+        </div>
+      </nav>
 
-      {/* Back Button */}
-      <motion.div 
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="absolute top-6 left-6 z-20"
-      >
-        <Button variant="ghost" size="sm" asChild className="hover:bg-accent/10">
-          <Link href="/assistant">
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Portal
-          </Link>
-        </Button>
-      </motion.div>
-
-      {/* Header */}
-      <div className="w-full max-w-5xl relative z-10 mb-8 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="space-y-4"
-        >
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/50 pb-1">
-            Review Inquiry
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Submitted on {formatDate(inquiry.created_at)}
-          </p>
-        </motion.div>
-      </div>
-
-      {/* Tabs */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.5 }}
-        className="w-full max-w-5xl relative z-10"
-      >
-        <Tabs defaultValue="details" className="w-full">
-          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap bg-muted/50 p-1 mb-8">
-            <TabsTrigger 
-              value="details"
-              className="data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-2"
-            >
-              <Info className="w-4 h-4" />
-              Inquiry Details
-            </TabsTrigger>
-            {inquiry.status !== "follow_up" && (inquiry.status === "matched" || inquiry.status === "under_review" || matches.length > 0) && (
-              <TabsTrigger 
-                value="matches"
-                className="data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-2"
+      {/* Main Content */}
+      <div className="flex-1 relative">
+        <ScrollArea className="h-[calc(100vh-4rem)]">
+          <div className="px-4 py-4 space-y-4">
+            {/* Compact Inquiry Header */}
+            <div className="flex gap-3">
+              {/* Small Thumbnail */}
+              <button
+                onClick={() => setImageDialogOpen(true)}
+                className="relative w-20 h-20 rounded-lg overflow-hidden bg-muted/10 border border-border/20 shrink-0"
               >
-                <Zap className="w-4 h-4" />
-                AI Matches
-                {matches.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                    {matches.length}
-                  </Badge>
+                {inquiry.image_url ? (
+                  <Image
+                    src={inquiry.image_url}
+                    alt="Lost item"
+                    fill
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground/20" />
+                  </div>
                 )}
-              </TabsTrigger>
-            )}
-            {(inquiry.status === "follow_up" || inquiry.status === "matched") && (
-              <TabsTrigger 
-                value="followup"
-                className="data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-2"
-              >
-                <MessageCircleQuestion className="w-4 h-4" />
-                Follow Up
-                {savedFollowUpQuestions.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                    {savedFollowUpQuestions.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            )}
-          </TabsList>
+              </button>
 
-          {/* Inquiry Details Tab */}
-          <TabsContent value="details">
-            <div className="rounded-2xl border border-border/50 backdrop-blur-sm overflow-hidden">
-              <div className="grid md:grid-cols-[320px_1fr]">
-                {/* Left: Image */}
-                <div className="p-4 flex items-center justify-center bg-muted/30">
-                  <AspectRatio ratio={1} className="overflow-hidden rounded-xl border border-border/50">
-                    {inquiry.image_url ? (
-                      <Image
-                        src={inquiry.image_url}
-                        alt="Inquiry image"
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-muted/50">
-                        <div className="text-center text-muted-foreground/50">
-                          <ImageIcon className="w-12 h-12 mx-auto mb-2" />
-                          <p className="text-sm">No image</p>
-                        </div>
-                      </div>
-                    )}
-                  </AspectRatio>
-                </div>
-
-                {/* Right: Details */}
-                <div className="p-6 space-y-5 flex flex-col justify-center">
-                  {/* Header with Status */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <h3 className="text-lg font-semibold">Inquiry Details</h3>
-                      <p className="text-sm text-muted-foreground font-mono">{inquiry.id}</p>
-                    </div>
-                    <Badge variant="outline" className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 text-sm ${status.className}`}>
-                      <StatusIcon className="w-3.5 h-3.5" />
+              {/* Stacked Info */}
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <h2 className="text-base font-semibold text-foreground line-clamp-2">
+                  {getTitle()}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {formatDate(inquiry.created_at)}
+                </p>
+                
+                {/* Status Row */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Status:</span>
+                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${status.className}`}>
                       {status.label}
                     </Badge>
                   </div>
-
-                  {/* Description */}
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Description</label>
-                    <p className="text-sm leading-relaxed text-foreground/90 mt-2">
-                      {inquiry.description || "No description provided"}
-                    </p>
-                  </div>
-
-                  <Separator />
-
-                  {/* Pipeline Progress */}
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</label>
-                    <div className="mt-4 flex items-center w-full">
-                      {(() => {
-                        // Define pipeline steps based on current status
-                        const isDenied = inquiry.status === "denied";
-                        const isResolved = inquiry.status === "resolved";
-                        
-                        // Pipeline order for calculating "past" status
-                        const pipelineOrder = ["submitted", "under_review", "follow_up", "matched", "resolved"];
-                        const currentIndex = pipelineOrder.indexOf(inquiry.status);
-                        
-                        const steps = [
-                          { status: "submitted", label: "Submitted", icon: Clock, color: "bg-secondary text-secondary-foreground" },
-                          { status: "under_review", label: "Reviewing", icon: FileSearch, color: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
-                          { status: "follow_up", label: "Follow Up", icon: MessageCircleQuestion, color: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400" },
-                          { status: "matched", label: "Matched", icon: CheckCircle2, color: "bg-green-500/15 text-green-600 dark:text-green-400" },
-                          ...(isDenied ? [] : [{ status: "resolved", label: "Resolved", icon: CheckCircle2, color: "bg-green-500/15 text-green-600 dark:text-green-400" }]),
-                          ...(isDenied ? [{ status: "denied", label: "Denied", icon: XCircle, color: "bg-destructive/15 text-destructive" }] : []),
-                        ];
-                        
-                        return steps.map((step, index, arr) => {
-                          const StepIcon = step.icon;
-                          const isCurrent = inquiry.status === step.status;
-                          const stepIndex = pipelineOrder.indexOf(step.status);
-                          
-                          // isPast: step comes before current in pipeline, or we're denied (all other steps are past)
-                          const isPast = isDenied 
-                            ? step.status !== "denied"  // When denied, ALL other steps are past/disabled
-                            : stepIndex < currentIndex && stepIndex !== -1;
-                          
-                          const isLast = index === arr.length - 1;
-                          
-                          return (
-                            <div key={step.status} className={`flex items-center ${isLast ? "" : "flex-1"}`}>
-                              <div className={`flex items-center justify-center gap-1 px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium transition-all shrink-0 ${
-                                isCurrent 
-                                  ? step.color
-                                  : isPast
-                                    ? "bg-muted/50 text-muted-foreground"
-                                    : "bg-transparent text-muted-foreground/40 border border-border/50"
-                              }`}>
-                                <StepIcon className="w-3 h-3 shrink-0" />
-                                <span className="hidden sm:inline">{step.label}</span>
-                              </div>
-                              {!isLast && (
-                                <div className={`flex-1 h-0.5 mx-1 ${
-                                  step.status === "matched" && isDenied
-                                    ? "bg-destructive/50"
-                                    : step.status === "matched" && isResolved
-                                      ? "bg-green-500/50"
-                                      : isPast || isCurrent 
-                                        ? "bg-muted-foreground/30" 
-                                        : "bg-border/50"
-                                }`} />
-                              )}
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  {/* Status-Based Actions */}
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Actions</label>
-                    <div className="mt-4">
-                    {/* Submitted - Start Review */}
-                    {inquiry.status === "submitted" && (
-                      <Button 
-                        onClick={handleTriggerSearch} 
-                        disabled={searchLoading}
-                        className="w-full"
-                      >
-                        {searchLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Starting Review...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4 mr-2" />
-                            Start Review (Run AI Search)
-                          </>
-                        )}
-                      </Button>
-                    )}
-
-                    {/* Under Review - Show loading */}
-                    {inquiry.status === "under_review" && (
-                      <div className="flex items-center justify-center gap-2 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                        <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
-                        <span className="text-sm text-yellow-600 dark:text-yellow-400">AI is analyzing matches...</span>
-                      </div>
-                    )}
-
-                    {/* Matched - Confirm, Follow Up, or Deny */}
-                    {inquiry.status === "matched" && (
-                      selectedMatchForAction ? (
-                        <div className="grid sm:grid-cols-3 gap-3">
-                          <Button 
-                            onClick={() => handleStatusChange("resolved")}
-                            className="w-full bg-green-500/15 text-green-600 hover:bg-green-500/25 dark:text-green-400"
-                          >
-                            <CheckCircle2 className="w-4 h-4 mr-2" />
-                            Confirm Match
-                          </Button>
-                          <Button 
-                            onClick={() => handleStatusChange("follow_up")}
-                            className="w-full bg-orange-500/15 text-orange-600 hover:bg-orange-500/25 dark:text-orange-400"
-                          >
-                            <MessageCircleQuestion className="w-4 h-4 mr-2" />
-                            Request Follow Up
-                          </Button>
-                          <Button 
-                            onClick={() => handleStatusChange("denied")}
-                            className="w-full bg-destructive/15 text-destructive hover:bg-destructive/25"
-                          >
-                            <XCircle className="w-4 h-4 mr-2" />
-                            Deny
-                          </Button>
-                        </div>
-                      ) : (
-                        <Alert>
-                          <Info className="h-4 w-4" />
-                          <AlertTitle>No match selected</AlertTitle>
-                          <AlertDescription>
-                            Please select a match from the AI Matches tab before confirming or taking action.
-                          </AlertDescription>
-                        </Alert>
-                      )
-                    )}
-
-                    {/* Follow Up - Re-run search or Deny */}
-                    {inquiry.status === "follow_up" && (
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <Button 
-                          onClick={handleTriggerSearch}
-                          disabled={searchLoading}
-                          className="w-full"
-                        >
-                          {searchLoading ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              Searching...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4 mr-2" />
-                              Re-run AI Search
-                            </>
-                          )}
-                        </Button>
-                        <Button 
-                          onClick={() => handleStatusChange("denied")}
-                          className="w-full bg-destructive/15 text-destructive hover:bg-destructive/25"
-                        >
-                          <XCircle className="w-4 h-4 mr-2" />
-                          Deny Inquiry
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Reviewed - Similar to Matched */}
-                    {inquiry.status === "reviewed" && (
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <Button 
-                          onClick={handleTriggerSearch}
-                          disabled={searchLoading}
-                          className="w-full"
-                        >
-                          {searchLoading ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              Searching...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4 mr-2" />
-                              Run AI Search
-                            </>
-                          )}
-                        </Button>
-                        <Button 
-                          onClick={() => handleStatusChange("follow_up")}
-                          className="w-full bg-orange-500/15 text-orange-600 hover:bg-orange-500/25 dark:text-orange-400"
-                        >
-                          <MessageCircleQuestion className="w-4 h-4 mr-2" />
-                          Request Follow Up
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Resolved - End state */}
-                    {inquiry.status === "resolved" && (
-                      <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-md bg-green-500/10 border border-green-500/20 h-10">
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        <span className="text-sm text-green-600 dark:text-green-400 font-medium">Inquiry Resolved</span>
-                      </div>
-                    )}
-
-                    {/* Denied - End state */}
-                    {inquiry.status === "denied" && (
-                      <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-md bg-destructive/10 border border-destructive/20 h-10">
-                        <XCircle className="w-4 h-4 text-destructive" />
-                        <span className="text-sm text-destructive font-medium">Inquiry Denied</span>
-                      </div>
-                    )}
-                    </div>
-                  </div>
+                  {showMatches && (
+                    <>
+                      <span className="text-muted-foreground/30">•</span>
+                      <span className="text-xs text-muted-foreground">
+                        AI Matches: {matches.length}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
-          </TabsContent>
 
-          {/* AI Matches Tab */}
-          <TabsContent value="matches" className="space-y-6">
-            {/* Search Button */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-yellow-500" />
+            <Separator className="bg-border/20" />
+
+            {/* AI Matches Section - Dense Review Table */}
+            {showMatches && (
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-foreground">AI Matches</h3>
+                  <Button 
+                    onClick={handleTriggerSearch} 
+                    disabled={searchLoading}
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                  >
+                    {searchLoading ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        Search
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold">AI Match Results</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {matches.length > 0 
-                      ? `${matches.length} potential match${matches.length > 1 ? "es" : ""} found`
-                      : "No matches found yet"
-                    }
-                  </p>
-                </div>
-              </div>
-              <Button 
-                onClick={handleTriggerSearch} 
-                disabled={searchLoading}
-                size="sm"
-                variant="outline"
-              >
-                {searchLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+
+                {matches.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground/60">
+                    <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                    <p className="text-xs">No matches found</p>
+                  </div>
                 ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Search
-                  </>
-                )}
-              </Button>
-            </div>
+                  <div className="space-y-1">
+                    {matches.map((match) => {
+                      const matchStatus = matchStatusConfig[match.status];
+                      const scorePercent = Math.round(match.combined_score * 100);
+                      const isSelected = selectedMatchForAction === match.id;
+                      const item = match.item;
 
-            {/* Empty State */}
-            {matches.length === 0 && (
-              <div className="text-center py-16 rounded-2xl border border-border/50 bg-muted/20">
-                <Search className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
-                <p className="text-muted-foreground">No matches found</p>
-                <p className="text-sm text-muted-foreground/70 mt-1">
-                  Click &quot;Search&quot; to find potential matches
-                </p>
-              </div>
-            )}
-
-            {/* Matches List */}
-            {matches.length > 0 && (
-              <div className="space-y-4">
-                {/* Filter matches: show only selected or all if none selected */}
-                {(selectedMatchForAction 
-                  ? matches.filter(m => m.id === selectedMatchForAction)
-                  : matches
-                ).map((match, index) => {
-                  const matchStatus = matchStatusConfig[match.status];
-                  const scorePercent = Math.round(match.combined_score * 100);
-                  const isLoading = actionLoading === match.id;
-                  const isSelected = selectedMatchForAction === match.id;
-
-                  return (
-                    <motion.div
-                      key={match.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`p-5 rounded-2xl border backdrop-blur-sm transition-all cursor-pointer ${
-                        isSelected 
-                          ? "border-primary bg-primary/5" 
-                          : "border-border/50 bg-card/30 hover:border-accent/50 hover:bg-accent/5"
-                      }`}
-                      onClick={() => { setSelectedMatch(match); setDialogOpen(true); }}
-                    >
-                      <div className="flex flex-col items-center md:grid md:grid-cols-[280px_1fr] md:items-stretch">
-                        {/* Left Column: Images + Buttons */}
-                        <div className="flex flex-col w-full max-w-md md:max-w-none md:h-full md:justify-between md:pr-5 md:border-r md:border-border/50">
-                          {/* Images Side by Side */}
-                          <div className="flex gap-3">
-                            {/* Inquiry Image */}
-                            <div className="flex-1">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5 text-center">Inquiry</span>
-                              <AspectRatio ratio={1} className="rounded-xl overflow-hidden border border-border/50 bg-muted/30">
-                                {inquiry.image_url ? (
-                                  <Image
-                                    src={inquiry.image_url}
-                                    alt="Inquiry"
-                                    fill
-                                    className="object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <ImageIcon className="w-8 h-8 text-muted-foreground/30" />
-                                  </div>
-                                )}
-                              </AspectRatio>
-                            </div>
-
-                            {/* Match Image */}
-                            <div className="flex-1">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5 text-center">Match</span>
-                              <AspectRatio ratio={1} className="rounded-xl overflow-hidden border border-border/50 bg-muted/30">
-                                {match.item?.image_url ? (
-                                  <Image
-                                    src={match.item.image_url}
-                                    alt="Matched item"
-                                    fill
-                                    className="object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <ImageIcon className="w-8 h-8 text-muted-foreground/30" />
-                                  </div>
-                                )}
-                              </AspectRatio>
-                            </div>
+                      return (
+                        <div
+                          key={match.id}
+                          className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-colors ${
+                            isSelected 
+                              ? "border-primary/30 bg-primary/5" 
+                              : "border-border/20 hover:border-border/30 bg-background"
+                          }`}
+                        >
+                          {/* Small Thumbnail */}
+                          <div className="relative w-12 h-12 rounded-md overflow-hidden bg-muted/10 border border-border/20 shrink-0">
+                            {item?.image_url ? (
+                              <Image
+                                src={item.image_url}
+                                alt={item.caption || "Match"}
+                                fill
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <ImageIcon className="w-5 h-5 text-muted-foreground/20" />
+                              </div>
+                            )}
                           </div>
 
-                          {/* Select/Deselect Button - Desktop Only */}
-                          {match.status === "pending" && (
-                            <div className="hidden md:block mt-4">
-                              <Button
-                                className={`w-full ${
-                                  isSelected 
-                                    ? "bg-destructive/15 text-destructive hover:bg-destructive/25" 
-                                    : "bg-green-500/15 text-green-600 hover:bg-green-500/25 dark:text-green-400"
-                                }`}
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  setSelectedMatchForAction(isSelected ? null : match.id);
-                                }}
+                          {/* Content - Info Dense */}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            {/* Title + Confidence */}
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="text-sm font-medium text-foreground line-clamp-2 flex-1">
+                                {item?.caption || "Unknown item"}
+                              </h4>
+                              <Badge 
+                                variant="outline" 
+                                className={`text-[10px] px-1.5 py-0 shrink-0 ${matchStatus.className}`}
                               >
-                                {isSelected ? (
-                                  <>
-                                    <X className="w-4 h-4 mr-2" />
-                                    Deselect
-                                  </>
-                                ) : (
-                                  <>
-                                    <Check className="w-4 h-4 mr-2" />
-                                    Select Match
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Right Column: Details */}
-                        <div className="w-full max-w-md md:max-w-none mt-5 md:mt-0 md:pl-5 space-y-3 md:flex md:flex-col md:justify-center">
-                          {/* Header */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="font-medium text-sm line-clamp-2 text-center md:text-left">
-                                {match.item?.caption || "Unknown item"}
-                              </p>
-                              {match.item?.category && (
-                                <p className="text-xs text-muted-foreground mt-0.5 text-center md:text-left">
-                                  {match.item.category}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {isSelected && (
-                                <Badge className="text-[10px] uppercase bg-primary/15 text-primary border-primary/30">
-                                  <Check className="w-3 h-3 mr-1" />
-                                  Selected
-                                </Badge>
-                              )}
-                              <Badge variant="outline" className={`text-[10px] uppercase ${matchStatus.className}`}>
-                                {matchStatus.label}
+                                {scorePercent}%
                               </Badge>
                             </div>
-                          </div>
 
-                          {/* Score */}
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Match Confidence</span>
-                              <span className="font-bold text-lg">{scorePercent}%</span>
+                            {/* Attributes Inline */}
+                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
+                              {item?.category && (
+                                <>
+                                  <span>{item.category}</span>
+                                  <span className="text-muted-foreground/30">•</span>
+                                </>
+                              )}
+                              {match.created_at && (
+                                <>
+                                  <span>Found {formatDateShort(match.created_at)}</span>
+                                  <span className="text-muted-foreground/30">•</span>
+                                </>
+                              )}
+                              {matchStatus.label !== "Pending" && (
+                                <span className={matchStatus.className}>
+                                  {matchStatus.label}
+                                </span>
+                              )}
                             </div>
-                            <Progress value={scorePercent} className="h-2" />
                           </div>
 
-                          {/* Score Breakdown */}
-                          <div className="flex flex-wrap justify-center md:justify-start gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                            {match.img_to_img_score !== null && (
-                              <span className="flex items-center gap-1">
-                                <ImageIcon className="w-3 h-3 text-blue-500" />
-                                Img→Img: {Math.round(match.img_to_img_score * 100)}%
-                              </span>
-                            )}
-                            {match.img_to_caption_score !== null && (
-                              <span className="flex items-center gap-1">
-                                <ImageIcon className="w-3 h-3 text-purple-500" />
-                                Img→Cap: {Math.round(match.img_to_caption_score * 100)}%
-                              </span>
-                            )}
-                            {match.desc_to_img_score !== null && (
-                              <span className="flex items-center gap-1">
-                                <FileText className="w-3 h-3 text-green-500" />
-                                Desc→Img: {Math.round(match.desc_to_img_score * 100)}%
-                              </span>
-                            )}
-                            {match.desc_to_caption_score !== null && (
-                              <span className="flex items-center gap-1">
-                                <FileText className="w-3 h-3 text-orange-500" />
-                                Desc→Cap: {Math.round(match.desc_to_caption_score * 100)}%
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Select/Deselect Button - Mobile Only */}
-                          {match.status === "pending" && (
-                            <div className="md:hidden pt-2 w-full max-w-md mx-auto">
-                              <Button
-                                className={`w-full ${
-                                  isSelected 
-                                    ? "bg-destructive/15 text-destructive hover:bg-destructive/25" 
-                                    : "bg-green-500/15 text-green-600 hover:bg-green-500/25 dark:text-green-400"
-                                }`}
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
+                          {/* Right Action Area */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {match.status === "pending" && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setSelectedMatchForAction(isSelected ? null : match.id);
                                 }}
+                                className={`p-1.5 rounded transition-colors ${
+                                  isSelected
+                                    ? "bg-primary/10 text-primary"
+                                    : "hover:bg-muted/50 text-muted-foreground"
+                                }`}
                               >
                                 {isSelected ? (
-                                  <>
-                                    <X className="w-4 h-4 mr-2" />
-                                    Deselect
-                                  </>
+                                  <Check className="w-3.5 h-3.5" />
                                 ) : (
-                                  <>
-                                    <Check className="w-4 h-4 mr-2" />
-                                    Select Match
-                                  </>
+                                  <X className="w-3.5 h-3.5" />
                                 )}
-                              </Button>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setSelectedMatch(match); setDialogOpen(true); }}
+                              className="p-1.5 rounded hover:bg-muted/50 text-muted-foreground transition-colors"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Follow Up Section */}
+            {showFollowUp && (
+              <>
+                <Separator className="bg-border/20" />
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium text-foreground">Follow Up</h3>
+                  
+                  {savedFollowUpQuestions.length > 0 && (
+                    <div className="space-y-2">
+                      {savedFollowUpQuestions.map((q) => (
+                        <div key={q.id} className="p-3 rounded-lg bg-muted/5 border border-border/20 space-y-2">
+                          <p className="text-sm font-medium">{q.question}</p>
+                          {q.response ? (
+                            <div className="p-2 rounded bg-muted/10 border border-border/10">
+                              <p className="text-xs text-muted-foreground mb-1">Response:</p>
+                              <p className="text-sm">{q.response}</p>
                             </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic">Awaiting response...</p>
                           )}
                         </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </TabsContent>
+                      ))}
+                      
+                      {savedFollowUpQuestions.some(q => q.response) && (
+                        <Button
+                          variant="outline"
+                          className="w-full h-9 text-xs"
+                          onClick={async () => {
+                            setReSearching(true);
+                            try {
+                              await searchWithFollowUpResponses(id);
+                              const matchesData = await getInquiryMatches(id);
+                              setMatches(matchesData.matches);
+                              setInquiry(prev => prev ? { ...prev, status: "matched" } : null);
+                            } catch (err) {
+                              console.error("Failed to re-search:", err);
+                            } finally {
+                              setReSearching(false);
+                            }
+                          }}
+                          disabled={reSearching}
+                        >
+                          {reSearching ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                              Searching...
+                            </>
+                          ) : (
+                            <>
+                              <Search className="w-3.5 h-3.5 mr-1.5" />
+                              Re-run Search
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  )}
 
-          {/* Follow Up Tab */}
-          <TabsContent value="followup" className="space-y-6">
-            <div className="rounded-2xl border border-border/50 backdrop-blur-sm p-6 space-y-6">
-              {/* Show saved questions and responses if any */}
-              {savedFollowUpQuestions.length > 0 && (
-                <>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                      <CheckCircle2 className="w-5 h-5 text-green-500" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-semibold">Sent Questions & Responses</h2>
-                      <p className="text-sm text-muted-foreground">
-                        Questions sent to user and their responses
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {savedFollowUpQuestions.map((q, index) => (
-                      <div 
-                        key={q.id}
-                        className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center text-green-500 text-xs font-medium flex-shrink-0">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{q.question}</p>
-                            {q.response ? (
-                              <div className="mt-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                                <p className="text-xs text-muted-foreground mb-1">User response:</p>
-                                <p className="text-sm">{q.response}</p>
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground mt-1 italic">Awaiting response...</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Re-run Search Button - only show if there are responses */}
-                  {savedFollowUpQuestions.some(q => q.response) && (
-                    <Button
-                      className="w-full bg-blue-500/15 text-blue-600 hover:bg-blue-500/25 dark:text-blue-400"
-                      onClick={async () => {
-                        setReSearching(true);
-                        try {
-                          await searchWithFollowUpResponses(id);
-                          // Refresh matches
-                          const matchesData = await getInquiryMatches(id);
-                          setMatches(matchesData.matches);
-                          // Update status to matched
-                          setInquiry(prev => prev ? { ...prev, status: "matched" } : null);
-                        } catch (err) {
-                          console.error("Failed to re-search:", err);
-                        } finally {
-                          setReSearching(false);
+                  <div className="flex gap-2">
+                    <Input
+                      value={newQuestion}
+                      onChange={(e) => setNewQuestion(e.target.value)}
+                      placeholder="Add a question..."
+                      className="flex-1 h-9 text-sm"
+                      disabled={inquiry.status === "follow_up"}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newQuestion.trim()) {
+                          setFollowUpQuestions(prev => [...prev, newQuestion.trim()]);
+                          setNewQuestion("");
                         }
                       }}
-                      disabled={reSearching}
+                    />
+                    <Button
+                      onClick={() => {
+                        if (newQuestion.trim()) {
+                          setFollowUpQuestions(prev => [...prev, newQuestion.trim()]);
+                          setNewQuestion("");
+                        }
+                      }}
+                      disabled={!newQuestion.trim() || inquiry.status === "follow_up"}
+                      size="icon"
+                      className="h-9 w-9"
                     >
-                      {reSearching ? (
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  {followUpQuestions.length === 0 && (
+                    <Button
+                      variant="outline"
+                      className="w-full h-9 text-xs"
+                      onClick={async () => {
+                        setGeneratingQuestions(true);
+                        try {
+                          const response = await generateFollowUpQuestions(id);
+                          setFollowUpQuestions(response.questions);
+                        } catch (err) {
+                          console.error("Failed to generate questions:", err);
+                        } finally {
+                          setGeneratingQuestions(false);
+                        }
+                      }}
+                      disabled={generatingQuestions || inquiry.status === "follow_up"}
+                    >
+                      {generatingQuestions ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Searching...
+                          <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                          Generating...
                         </>
                       ) : (
                         <>
-                          <Search className="w-4 h-4 mr-2" />
-                          Re-run Search with Responses
+                          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                          Generate AI Questions
                         </>
                       )}
                     </Button>
                   )}
-                  
-                  <Separator />
-                </>
-              )}
 
-              {/* Header for new questions */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                    <MessageCircleQuestion className="w-5 h-5 text-orange-500" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      {savedFollowUpQuestions.length > 0 ? "Add More Questions" : "Follow Up Questions"}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Request additional information from the user
-                    </p>
+                  {followUpQuestions.length > 0 && (
+                    <div className="space-y-1.5">
+                      {followUpQuestions.map((question, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/5 border border-border/20">
+                          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[10px] font-medium shrink-0">
+                            {index + 1}
+                          </div>
+                          <p className="flex-1 text-sm">{question}</p>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                            onClick={() => {
+                              setFollowUpQuestions(prev => prev.filter((_, i) => i !== index));
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {inquiry.status === "follow_up" && followUpQuestions.length === 0 ? (
+                    <Button className="w-full h-9 text-xs" disabled>
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                      Follow-up Sent
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full h-9 text-xs"
+                      onClick={async () => {
+                        setSendingFollowUp(true);
+                        try {
+                          const response = await sendFollowUpQuestions(id, followUpQuestions);
+                          setInquiry(prev => prev ? { ...prev, status: "follow_up" } : null);
+                          setSavedFollowUpQuestions(prev => [...prev, ...response.questions]);
+                          setFollowUpQuestions([]);
+                        } catch (err) {
+                          console.error("Failed to send follow-up:", err);
+                        } finally {
+                          setSendingFollowUp(false);
+                        }
+                      }}
+                      disabled={sendingFollowUp || followUpQuestions.length === 0}
+                    >
+                      {sendingFollowUp ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5 mr-1.5" />
+                          Send Follow Up
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Bottom Actions Bar */}
+      {hasActions && (
+        <div className="sticky bottom-0 z-30 border-t border-border/10 bg-background/95 backdrop-blur-sm p-4">
+          <div className="space-y-2">
+            {/* Submitted - Start Review */}
+            {inquiry.status === "submitted" && (
+              <Button 
+                onClick={handleTriggerSearch} 
+                disabled={searchLoading}
+                className="w-full h-11"
+              >
+                {searchLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Starting Review...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Start Review
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* Under Review - Loading */}
+            {inquiry.status === "under_review" && (
+              <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                <span className="text-sm text-orange-600 dark:text-orange-400">AI is analyzing matches...</span>
+              </div>
+            )}
+
+            {/* Matched - Confirm, Follow Up, or Deny */}
+            {inquiry.status === "matched" && (
+              selectedMatchForAction ? (
+                <div className="space-y-2">
+                  <Button 
+                    onClick={() => handleMatchAction(selectedMatchForAction, "approve")}
+                    disabled={actionLoading === selectedMatchForAction}
+                    className="w-full h-11"
+                  >
+                    {actionLoading === selectedMatchForAction ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Confirming...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Confirm Match
+                      </>
+                    )}
+                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      onClick={() => handleStatusChange("follow_up")}
+                      variant="outline"
+                      className="h-10"
+                    >
+                      <MessageCircleQuestion className="w-4 h-4 mr-2" />
+                      Follow Up
+                    </Button>
+                    <Button 
+                      onClick={() => handleStatusChange("denied")}
+                      variant="outline"
+                      className="h-10"
+                    >
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Deny
+                    </Button>
                   </div>
                 </div>
-                <Button
+              ) : (
+                <Alert>
+                  <FileText className="h-4 w-4" />
+                  <AlertTitle>No match selected</AlertTitle>
+                  <AlertDescription>
+                    Select a match from the list above to confirm.
+                  </AlertDescription>
+                </Alert>
+              )
+            )}
+
+            {/* Follow Up - Re-run search or Deny */}
+            {inquiry.status === "follow_up" && (
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  onClick={handleTriggerSearch}
+                  disabled={searchLoading}
                   variant="outline"
-                  onClick={async () => {
-                    setGeneratingQuestions(true);
-                    try {
-                      const response = await generateFollowUpQuestions(id);
-                      setFollowUpQuestions(response.questions);
-                    } catch (err) {
-                      console.error("Failed to generate questions:", err);
-                    } finally {
-                      setGeneratingQuestions(false);
-                    }
-                  }}
-                  disabled={generatingQuestions || inquiry.status === "follow_up"}
+                  className="h-11"
                 >
-                  {generatingQuestions ? (
+                  {searchLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 mr-2" />
+                  )}
+                  Re-run Search
+                </Button>
+                <Button 
+                  onClick={() => handleStatusChange("denied")}
+                  variant="outline"
+                  className="h-11"
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Deny
+                </Button>
+              </div>
+            )}
+
+            {/* Reviewed - Run search */}
+            {inquiry.status === "reviewed" && (
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  onClick={handleTriggerSearch}
+                  disabled={searchLoading}
+                  className="h-11"
+                >
+                  {searchLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Generating...
+                      Searching...
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 mr-2" />
-                      Generate AI Questions
+                      Run AI Search
                     </>
                   )}
                 </Button>
-              </div>
-
-              <Separator />
-
-              {/* Add Custom Question */}
-              <div className="flex gap-3">
-                <Input
-                  value={newQuestion}
-                  onChange={(e) => setNewQuestion(e.target.value)}
-                  placeholder="Add a custom question..."
-                  className="flex-1"
-                  disabled={inquiry.status === "follow_up"}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && newQuestion.trim()) {
-                      setFollowUpQuestions(prev => [...prev, newQuestion.trim()]);
-                      setNewQuestion("");
-                    }
-                  }}
-                />
-                <Button
-                  onClick={() => {
-                    if (newQuestion.trim()) {
-                      setFollowUpQuestions(prev => [...prev, newQuestion.trim()]);
-                      setNewQuestion("");
-                    }
-                  }}
-                  disabled={!newQuestion.trim() || inquiry.status === "follow_up"}
+                <Button 
+                  onClick={() => handleStatusChange("follow_up")}
+                  variant="outline"
+                  className="h-11"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add
+                  <MessageCircleQuestion className="w-4 h-4 mr-2" />
+                  Follow Up
                 </Button>
               </div>
+            )}
 
-              {/* Questions List (draft questions not yet sent) */}
-              <div className="space-y-3">
-                {followUpQuestions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageCircleQuestion className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No new questions to send</p>
-                    <p className="text-sm mt-1">Generate AI questions or add your own above</p>
-                  </div>
-                ) : (
-                  followUpQuestions.map((question, index) => (
-                    <div 
-                      key={index}
-                      className="flex items-center gap-3 p-4 rounded-xl bg-muted/30 border border-border/50"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-500 text-xs font-medium flex-shrink-0">
-                        {index + 1}
-                      </div>
-                      <p className="flex-1 text-sm leading-relaxed">{question}</p>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive h-8 w-8 flex-shrink-0"
-                        onClick={() => {
-                          setFollowUpQuestions(prev => prev.filter((_, i) => i !== index));
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))
-                )}
+            {/* Resolved - Subtle disabled state */}
+            {inquiry.status === "resolved" && (
+              <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-sm text-green-600 dark:text-green-400 font-medium">Inquiry Resolved</span>
               </div>
+            )}
 
-              {/* Send Button */}
-              <Separator />
-              {inquiry.status === "follow_up" && followUpQuestions.length === 0 ? (
-                <Button
-                  className="w-full bg-green-500/15 text-green-600 dark:text-green-400"
-                  disabled
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Follow-up Sent - Awaiting Response
-                </Button>
-              ) : (
-                <Button
-                  className="w-full bg-orange-500/15 text-orange-600 hover:bg-orange-500/25 dark:text-orange-400"
-                  onClick={async () => {
-                    setSendingFollowUp(true);
-                    try {
-                      // Save questions to backend (this also updates status to follow_up)
-                      const response = await sendFollowUpQuestions(id, followUpQuestions);
-                      
-                      // Update local state
-                      setInquiry(prev => prev ? { ...prev, status: "follow_up" } : null);
-                      setSavedFollowUpQuestions(prev => [...prev, ...response.questions]);
-                      setFollowUpQuestions([]); // Clear draft questions
-                    } catch (err) {
-                      console.error("Failed to send follow-up:", err);
-                    } finally {
-                      setSendingFollowUp(false);
-                    }
-                  }}
-                  disabled={sendingFollowUp || followUpQuestions.length === 0}
-                >
-                  {sendingFollowUp ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4 mr-2" />
-                      Send Follow Up to User
-                    </>
-                  )}
-                </Button>
-              )}
+            {/* Denied - Subtle disabled state */}
+            {inquiry.status === "denied" && (
+              <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                <XCircle className="w-4 h-4 text-destructive" />
+                <span className="text-sm text-destructive font-medium">Inquiry Denied</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Image Dialog */}
+      <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
+        <DialogContent className="max-w-md p-0">
+          {inquiry.image_url && (
+            <div className="relative aspect-square">
+              <Image
+                src={inquiry.image_url}
+                alt="Lost item"
+                fill
+                className="object-cover rounded-lg"
+              />
             </div>
-          </TabsContent>
-        </Tabs>
-      </motion.div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Match Detail Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -1118,7 +840,6 @@ export default function InquiryReviewPage({ params }: PageProps) {
 
                 {/* Side by Side Comparison */}
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Inquiry Image */}
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Inquiry</label>
                     <div className="relative aspect-square rounded-lg overflow-hidden bg-muted/30 border border-border/50">
@@ -1137,7 +858,6 @@ export default function InquiryReviewPage({ params }: PageProps) {
                     </div>
                   </div>
 
-                  {/* Match Image */}
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Matched Item</label>
                     <div className="relative aspect-square rounded-lg overflow-hidden bg-muted/30 border border-border/50">
@@ -1245,8 +965,7 @@ export default function InquiryReviewPage({ params }: PageProps) {
                 {selectedMatch.status === "pending" && (
                   <div className="flex gap-3 pt-4">
                     <Button
-                      size="lg"
-                      className={`flex-1 ${
+                      className={`flex-1 h-11 ${
                         selectedMatchForAction === selectedMatch.id
                           ? "bg-destructive/15 text-destructive hover:bg-destructive/25"
                           : "bg-green-500/15 text-green-600 hover:bg-green-500/25 dark:text-green-400"
@@ -1271,9 +990,8 @@ export default function InquiryReviewPage({ params }: PageProps) {
                       )}
                     </Button>
                     <Button
-                      size="lg"
                       variant="outline"
-                      className="flex-1"
+                      className="flex-1 h-11"
                       onClick={() => { setDialogOpen(false); }}
                     >
                       Close
@@ -1286,6 +1004,5 @@ export default function InquiryReviewPage({ params }: PageProps) {
         </DialogContent>
       </Dialog>
     </main>
-    </ScrollArea>
   );
 }

@@ -6,85 +6,82 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { InquiriesList } from "@/components/inquiries-list";
-import { CustomTabs } from "@/components/ui/custom-tabs";
 import { InquiryForm } from "@/components/inquiry-form";
 
 export default function InquiriesPage() {
   const [activeTab, setActiveTab] = useState("new");
 
   return (
-    <main className="min-h-screen bg-background relative overflow-hidden flex flex-col items-center pt-28 pb-12 px-4 md:px-6">
-      {/* Background Elements */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-accent/5 z-0" />
-      <div className="absolute top-0 left-0 w-full h-96 bg-accent/10 blur-[150px] rounded-full mix-blend-screen pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-full h-96 bg-purple-500/10 blur-[150px] rounded-full mix-blend-screen pointer-events-none" />
-
-      {/* Back Button */}
-      <motion.div 
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="absolute top-6 left-6 z-20"
-      >
-        <Button variant="ghost" size="sm" asChild className="hover:bg-accent/10">
-          <Link href="/">
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
-          </Link>
-        </Button>
-      </motion.div>
-
-      {/* Header & Tabs */}
-      <div className="w-full max-w-4xl relative z-10 mb-8 text-center space-y-6">
-        <motion.div
-           initial={{ opacity: 0, y: -20 }}
-           animate={{ opacity: 1, y: 0 }}
-           className="space-y-4"
-        >
-          <div className="space-y-2">
-            <div className="uppercase tracking-widest text-xs font-medium text-muted-foreground mb-2">Inquiries</div>
-            <h1 className="text-3xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/50 pb-1">
-              My Inquiries
-            </h1>
+    <main className="min-h-screen bg-background flex flex-col">
+      {/* Top App Bar */}
+      <nav className="border-b border-border/10 bg-background/95 backdrop-blur-sm sticky top-0 z-20">
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" asChild className="h-8 w-8 shrink-0">
+              <Link href="/">
+                <ArrowLeft className="w-4 h-4" />
+              </Link>
+            </Button>
+            <h1 className="text-base font-medium text-foreground">Inquiries</h1>
           </div>
-          
-          <div className="flex justify-center pt-2">
-            <CustomTabs 
-                tabs={[
-                    { id: "new", label: "New Inquiry" },
-                    { id: "history", label: "History" }
-                ]}
-                activeTab={activeTab}
-                onChange={setActiveTab}
-                className="w-full max-w-md"
-            />
-          </div>
-        </motion.div>
+        </div>
+      </nav>
+
+      {/* Segmented Control */}
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex rounded-lg bg-muted/10 p-1 max-w-md mx-auto">
+          <button
+            onClick={() => setActiveTab("new")}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              activeTab === "new"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            New
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              activeTab === "history"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            History
+          </button>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="w-full max-w-4xl relative z-10">
-        <AnimatePresence mode="wait">
+      <div className="flex-1 relative">
+        <div className="px-4 pb-6">
+          <AnimatePresence mode="wait">
             {activeTab === "new" ? (
-                <motion.div
-                    key="new"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                >
-                    <InquiryForm />
-                </motion.div>
+              <motion.div
+                key="new"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="max-w-2xl mx-auto"
+              >
+                <InquiryForm />
+              </motion.div>
             ) : (
-                <motion.div
-                    key="history"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                >
-                    <InquiriesList />
-                </motion.div>
+              <motion.div
+                key="history"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="max-w-2xl mx-auto"
+              >
+                <InquiriesList />
+              </motion.div>
             )}
-        </AnimatePresence>
+          </AnimatePresence>
+        </div>
       </div>
     </main>
   );

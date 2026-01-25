@@ -448,3 +448,15 @@ export async function createItem(image: File, collectionId: string, category?: s
 
   return res.json() as Promise<Item>;
 }
+
+export async function deleteItem(itemId: string) {
+  const res = await fetch(`${API_BASE}/inventory/items/${itemId}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to delete item");
+  }
+
+  return res.json();
+}

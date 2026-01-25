@@ -2,19 +2,19 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Search, Package, ArrowLeft, Loader2 } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Loader2, FolderOpen, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input"; 
+import { Input } from "@/components/ui/input";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { 
   getCollections, 
   createCollection as createCollectionAPI, 
@@ -33,6 +33,7 @@ export default function CollectionsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [hoveredCollection, setHoveredCollection] = useState<string | null>(null);
 
   useEffect(() => {
     getCollections()
@@ -58,7 +59,8 @@ export default function CollectionsPage() {
     }
   };
 
-  const handleDeleteCollection = async (id: string) => {
+  const handleDeleteCollection = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     try {
       await deleteCollectionAPI(id);
       setCollections(collections.filter((c) => c.id !== id));
@@ -68,169 +70,156 @@ export default function CollectionsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background relative overflow-hidden flex flex-col items-center pt-28 pb-12 px-4 md:px-6">
-      {/* Background Elements */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-accent/5 z-0" />
-      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 blur-[150px] rounded-full mix-blend-screen pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 blur-[150px] rounded-full mix-blend-screen pointer-events-none" />
+    <main className="min-h-screen bg-background flex flex-col">
+      <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-background/98 z-0" />
 
-      {/* Back Button */}
-      <motion.div 
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="absolute top-6 left-6 z-20"
-      >
-        <Button variant="ghost" size="sm" asChild className="hover:bg-accent/10">
-          <Link href="/">
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
-          </Link>
-        </Button>
-      </motion.div>
+      {/* Top App Bar */}
+      <nav className="relative z-20 border-b border-border/20 bg-background/80 backdrop-blur-sm sticky top-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" asChild className="h-9 w-9">
+                <Link href="/">
+                  <ArrowLeft className="w-4 h-4" />
+                </Link>
+              </Button>
+              <h1 className="text-lg font-semibold text-foreground">
+                Collections
+              </h1>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setIsCreateModalOpen(true)}
+              className="h-9 w-9"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </nav>
 
-      {/* Header */}
-      <div className="w-full max-w-4xl relative z-10 mb-12 text-center">
-        <motion.div
-           initial={{ opacity: 0, y: -20 }}
-           animate={{ opacity: 1, y: 0 }}
-           transition={{ duration: 0.5 }}
-           className="space-y-2"
-        >
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/50 pb-1">
-            Collections
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Manage collections of lost found items.
-          </p>
-        </motion.div>
+      {/* Compact Header */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-6 pb-4">
+        <p className="text-sm text-muted-foreground">
+          Found items grouped by collection.
+        </p>
       </div>
 
-
-
-      {/* Collections Grid */}
-      <div className="w-full max-w-4xl relative z-10">
+      {/* Collections List */}
+      <div className="relative z-10 flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-6">
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <AnimatePresence>
-              {collections.map((collection) => (
-                <motion.div
-                  key={collection.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  layout
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="h-full border-muted-foreground/20 hover:border-primary/50 transition-colors bg-transparent hover:shadow-lg group relative overflow-hidden">
-                    <CardHeader>
-                      <CardTitle className="flex items-start justify-between gap-2">
-                          <span className="truncate">{collection.name}</span>
-                          <div className="flex shrink-0">
-                              {/* Delete Button */}
-                              <Button
+          <>
+            {collections.length === 0 ? (
+              <div className="py-16 text-center">
+                <div className="w-16 h-16 bg-muted/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <FolderOpen className="w-8 h-8 text-muted-foreground/40" />
+                </div>
+                <h3 className="text-base font-medium mb-1.5">No collections yet</h3>
+                <p className="text-sm text-muted-foreground mb-6">Create your first collection to get started.</p>
+                <Button onClick={() => setIsCreateModalOpen(true)} size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Collection
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-0">
+                <AnimatePresence>
+                  {collections.map((collection) => (
+                    <motion.div
+                      key={collection.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      <Link 
+                        href={`/assistant/collection/${collection.id}`}
+                        className="block"
+                        onMouseEnter={() => setHoveredCollection(collection.id)}
+                        onMouseLeave={() => setHoveredCollection(null)}
+                      >
+                        <div className="flex items-center justify-between py-4 px-0 border-b border-border/20 hover:bg-muted/30 transition-colors group cursor-pointer">
+                          {/* Left: Content */}
+                          <div className="flex-1 min-w-0 pr-4">
+                            <div className="flex items-center gap-3 mb-1">
+                              <h3 className="text-base font-medium text-foreground truncate">
+                                {collection.name}
+                              </h3>
+                              {hoveredCollection === collection.id && (
+                                <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-2"
-                                  onClick={() => handleDeleteCollection(collection.id)}
-                              >
-                                  <Trash2 className="w-4 h-4" />
-                              </Button>
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                                  onClick={(e) => handleDeleteCollection(e, collection.id)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(collection.created_at)} • {collection.item_count} {collection.item_count === 1 ? 'item' : 'items'}
+                            </p>
                           </div>
-                      </CardTitle>
-                      <CardDescription>Created on {formatDate(collection.created_at)}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Package className="w-4 h-4" />
-                          <span>{collection.item_count} items</span>
-                      </div>
-                    </CardContent>
-                    <CardFooter className="pt-2">
-                          <Button variant="outline" className="w-full group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-colors" asChild>
-                              <Link href={`/assistant/collection/${collection.id}`}>View Items</Link>
-                          </Button>
-                    </CardFooter>
-                  </Card>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-            
-            {collections.length === 0 && (
-              <div className="col-span-full py-12 text-center text-muted-foreground">
-                  <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Search className="w-8 h-8 opacity-50" />
-                  </div>
-                  <p className="text-lg font-medium">No collections found</p>
-                  <p className="text-sm">Try creating a new one or adjusting your search.</p>
+                          
+                          {/* Right: Chevron */}
+                          <div className="shrink-0">
+                            <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                          </div>
+                        </div>
+                      </Link>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
-      {/* Create Button */}
-      <div className="relative z-10 w-full max-w-4xl flex justify-center mt-8">
-        <Button 
-            onClick={() => setIsCreateModalOpen(true)} 
-            className="gap-2"
-        >
-            <Plus className="w-4 h-4" /> Create New Collection
-        </Button>
-      </div>
-
-      {/* Create Catalog Modal (Custom simplified version or use Dialog if available) */}
-      <AnimatePresence>
-        {isCreateModalOpen && (
-            <>
-                <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setIsCreateModalOpen(false)}
-                    className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50"
-                />
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-8 border bg-background p-10 shadow-lg duration-200 sm:rounded-xl"
-                >
-                    <div className="flex flex-col space-y-2 text-center">
-                        <h2 className="text-xl font-semibold leading-none tracking-tight">Create New Collection</h2>
-                        <p className="text-sm text-muted-foreground">
-                            Enter a name for the new collection. You can add items to it later.
-                        </p>
-                    </div>
-                    
-                    <form onSubmit={handleCreateCollection} className="space-y-8">
-                        <div className="space-y-3">
-                            <Label htmlFor="name" className="text-md">Collection Name</Label>
-                            <Input 
-                                id="name" 
-                                placeholder="e.g. Lost Keys & Wallets" 
-                                value={newCollectionName}
-                                onChange={(e) => setNewCollectionName(e.target.value)}
-                                autoFocus
-                                className="h-11"
-                            />
-                        </div>
-                        <div className="flex flex-col-reverse sm:flex-row justify-center gap-4">
-                            <Button variant="outline" type="button" onClick={() => setIsCreateModalOpen(false)} className="px-8">
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={!newCollectionName.trim() || isCreating} className="px-8">
-                                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Create Collection
-                            </Button>
-                        </div>
-                    </form>
-                </motion.div>
-            </>
-        )}
-      </AnimatePresence>
+      {/* Create Collection Dialog */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Collection</DialogTitle>
+            <DialogDescription>
+              Enter a name for the new collection. You can add items to it later.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateCollection} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">Collection Name</Label>
+              <Input 
+                id="name" 
+                placeholder="e.g. Lost Keys & Wallets" 
+                value={newCollectionName}
+                onChange={(e) => setNewCollectionName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                type="button" 
+                onClick={() => setIsCreateModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={!newCollectionName.trim() || isCreating}
+              >
+                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create Collection
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

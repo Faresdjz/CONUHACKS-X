@@ -1,129 +1,86 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ShieldCheck, Search, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "../components/ui/separator";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-background">
-      {/* Background Elements */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-accent/5 z-0" />
-      <div className="absolute top-0 left-0 w-full h-96 bg-accent/10 blur-[150px] rounded-full mix-blend-screen pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-full h-96 bg-purple-500/10 blur-[150px] rounded-full mix-blend-screen pointer-events-none" />
+    <main className="min-h-screen flex flex-col bg-background">
+      {/* Subtle background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-background/98 z-0" />
 
-      {/* Header */}
-      <motion.header 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="relative z-10 mb-12 md:mb-16 text-center space-y-4"
-      >
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/50">
-          ilostit.
-        </h1>
-        <p className="text-muted-foreground text-lg md:text-xl max-w-md mx-auto">
-          Recover what matters.
-        </p>
-      </motion.header>
+      {/* Top Bar */}
+      <nav className="relative z-20 border-b border-border/20 bg-background/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              ilostit
+            </h1>
+          </div>
+        </div>
+      </nav>
 
-      <Separator className="w-24 mb-12 opacity-20" />
-
-      {/* Main Options */}
-      <div className="relative z-10 grid md:grid-cols-2 gap-6 md:gap-8 max-w-4xl w-full px-4">
-
-        {/* Regular Search Option */}
+      {/* Hero Section - Mobile Optimized */}
+      <div className="flex-1 flex flex-col justify-center relative z-10 px-6 py-12 md:py-16">
         <motion.div
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }}
-          className="h-full"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="max-w-md mx-auto w-full space-y-8"
         >
-          <Card className="h-full border-white/20 bg-transparent transition-colors group relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-             <CardHeader>
-              <CardTitle className="text-2xl flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center text-foreground">
-                  <Search className="w-5 h-5" />
-                </div>
-                Search for lost items
-              </CardTitle>
-              <CardDescription>
-                Find what you lost.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground leading-relaxed">
-                Tell us what you lost and we will help you find it quickly.
-              </p>
-            </CardContent>
-            <CardFooter className="pt-4">
-              <Button asChild className="w-full group-hover:bg-accent group-hover:text-accent-foreground transition-colors" variant="outline">
-                <Link href="/inquiries">
-                  Start Searching <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        </motion.div>
+          {/* Headline */}
+          <div className="space-y-3 text-center">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground leading-tight">
+              Find your lost item.
+            </h2>
+            <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
+              Private matches. Verified before anything is revealed.
+            </p>
+          </div>
 
-        {/* Assistant Portal Option */}
-        <motion.div
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2, duration: 0.8, ease: "easeOut" }}
-          className="h-full"
-        >
-          <Card className="h-full border-white/20 bg-transparent transition-colors group relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-            <CardHeader>
-              <CardTitle className="text-2xl flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
-                  <ShieldCheck className="w-5 h-5 text-white" />
-                </div>
+          {/* Action Buttons */}
+          <div className="space-y-3 pt-4">
+            <Button asChild className="w-full h-12 text-base font-medium" size="lg">
+              <Link href="/inquiries">
+                Start Search
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" className="w-full h-12 text-base" size="lg">
+              <Link href="/assistant">
                 Assistant Portal
-              </CardTitle>
-              <CardDescription>
-                Authorized personnel only.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground leading-relaxed">
-                Verify items, confirm matches against the database, and manage lost inventory.
-              </p>
-            </CardContent>
-            <CardFooter className="pt-4">
-              <Button asChild className="w-full group-hover:bg-accent group-hover:text-accent-foreground transition-colors" variant="outline">
-                <Link href="/assistant">
-                  Access Portal <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        </motion.div>
+              </Link>
+            </Button>
+          </div>
 
+          {/* Trust Strip */}
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-6">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+              <span>Private</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+              <span>Verified</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+              <span>Fast</span>
+            </div>
+          </div>
+        </motion.div>
       </div>
 
-      {/* Footer / Credits */}
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1, duration: 1 }}
-        className="absolute bottom-6 text-muted-foreground/40 text-xs md:text-sm"
-      >
-        © 2026 ilostit Inc.
-      </motion.div>
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-border/20 bg-background/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-center">
+            <p className="text-xs text-muted-foreground/60">
+              © 2026 ilostit
+            </p>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
-
