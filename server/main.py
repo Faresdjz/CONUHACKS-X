@@ -1,5 +1,7 @@
 from typing import Optional
 import os
+import traceback
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -49,12 +51,27 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize Milvus collections on startup."""
+    """Initialize Milvus collections and pre-load ML models on startup."""
     try:
         milvus.init_collections(drop_existing=False)
         print("Milvus collections initialized")
     except Exception as e:
         print(f"Warning: Could not initialize Milvus: {e}")
+
+    print("Pre-loading ML models...")
+    try:
+        from embeddings.dino import _load_model as load_dino
+        from embeddings.clip import _load_model as load_clip
+        from embeddings.sentence_embeddings import _load_model as load_sentence
+        load_dino()
+        print("  DINOv2 loaded")
+        load_clip()
+        print("  CLIP loaded")
+        load_sentence()
+        print("  Sentence transformer loaded")
+        print("All models loaded")
+    except Exception as e:
+        print(f"Warning: Could not pre-load models: {e}")
 
 
 # ============== Health & Stats ==============
@@ -137,11 +154,17 @@ async def create_item(
         # 3. Extract text with Gemini OCR
         extracted_text = extract_text_from_image(image_bytes)
         
-        # 4. Generate embeddings
-        dino_embedding = embed_image_dino(pil_image)
-        clip_image_embedding = embed_image_clip(pil_image)
-        clip_caption_embedding = embed_text_clip(caption)
-        sentence_embedding = embed_text(caption) if caption else [0.0] * 384  # Generate sentence embedding for caption
+        # 4. Generate embeddings (parallel)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            dino_future = pool.submit(embed_image_dino, pil_image)
+            clip_img_future = pool.submit(embed_image_clip, pil_image)
+            clip_cap_future = pool.submit(embed_text_clip, caption)
+            sent_future = pool.submit(lambda: embed_text(caption) if caption else [0.0] * 384)
+
+            dino_embedding = dino_future.result()
+            clip_image_embedding = clip_img_future.result()
+            clip_caption_embedding = clip_cap_future.result()
+            sentence_embedding = sent_future.result()
         
         # 5. Insert into Milvus collections
         milvus.insert_item_embeddings(
@@ -602,8 +625,11 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
             image_bytes = img_response.content
             pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             
-            dino_emb = embed_image_dino(pil_image)
-            clip_img_emb = embed_image_clip(pil_image)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                dino_future = pool.submit(embed_image_dino, pil_image)
+                clip_future = pool.submit(embed_image_clip, pil_image)
+                dino_emb = dino_future.result()
+                clip_img_emb = clip_future.result()
             
             # 1. Image → Image (DINOv2)
             results["img_to_img"] = milvus.search_dino(dino_emb, top_k=top_k * 2)
@@ -613,8 +639,11 @@ async def search_for_matches(inquiry_id: str, top_k: int = 10):
         
         # If user provided a description
         if description:
-            clip_txt_emb = embed_text_clip(description)
-            sentence_txt_emb = embed_text(description)  # Sentence embedding for description-to-description
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                clip_txt_future = pool.submit(embed_text_clip, description)
+                sent_txt_future = pool.submit(embed_text, description)
+                clip_txt_emb = clip_txt_future.result()
+                sentence_txt_emb = sent_txt_future.result()
             
             # 3. Description → Image (CLIP)
             results["desc_to_img"] = milvus.search_clip_image(clip_txt_emb, top_k=top_k * 2)
@@ -984,8 +1013,11 @@ async def search_with_follow_up_responses(inquiry_id: str, top_k: int = 10):
             image_bytes = img_response.content
             pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             
-            dino_emb = embed_image_dino(pil_image)
-            clip_img_emb = embed_image_clip(pil_image)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                dino_future = pool.submit(embed_image_dino, pil_image)
+                clip_future = pool.submit(embed_image_clip, pil_image)
+                dino_emb = dino_future.result()
+                clip_img_emb = clip_future.result()
             
             # Image → Image (DINOv2)
             results["img_to_img"] = milvus.search_dino(dino_emb, top_k=top_k * 2)
@@ -995,8 +1027,11 @@ async def search_with_follow_up_responses(inquiry_id: str, top_k: int = 10):
         
         # Use enhanced description for text-based searches
         if enhanced_description:
-            clip_txt_emb = embed_text_clip(enhanced_description)
-            sentence_txt_emb = embed_text(enhanced_description)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                clip_txt_future = pool.submit(embed_text_clip, enhanced_description)
+                sent_txt_future = pool.submit(embed_text, enhanced_description)
+                clip_txt_emb = clip_txt_future.result()
+                sentence_txt_emb = sent_txt_future.result()
             
             # Description → Image (CLIP)
             results["desc_to_img"] = milvus.search_clip_image(clip_txt_emb, top_k=top_k * 2)
@@ -1126,8 +1161,11 @@ async def test_search(
             image_bytes = await image.read()
             pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             
-            dino_emb = embed_image_dino(pil_image)
-            clip_img_emb = embed_image_clip(pil_image)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                dino_future = pool.submit(embed_image_dino, pil_image)
+                clip_future = pool.submit(embed_image_clip, pil_image)
+                dino_emb = dino_future.result()
+                clip_img_emb = clip_future.result()
             
             # 1. Image → Image (DINOv2)
             results["img_to_img"] = milvus.search_dino(dino_emb, top_k=top_k * 2)
@@ -1137,8 +1175,11 @@ async def test_search(
         
         # If user provided a description
         if description:
-            clip_txt_emb = embed_text_clip(description)
-            sentence_txt_emb = embed_text(description)  # Sentence embedding for description-to-description
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                clip_txt_future = pool.submit(embed_text_clip, description)
+                sent_txt_future = pool.submit(embed_text, description)
+                clip_txt_emb = clip_txt_future.result()
+                sentence_txt_emb = sent_txt_future.result()
             
             # 3. Description → Image (CLIP)
             results["desc_to_img"] = milvus.search_clip_image(clip_txt_emb, top_k=top_k * 2)
