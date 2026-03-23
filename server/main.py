@@ -1,4 +1,5 @@
 from typing import Optional
+import os
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -30,10 +31,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware for frontend
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+cors_origins = [origin.strip() for origin in FRONTEND_URL.split(",") if origin.strip()]
+if "http://localhost:3000" not in cors_origins:
+    cors_origins.append("http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
