@@ -49,14 +49,11 @@ def embed_image_clip(image: Union[Image.Image, bytes]) -> list[float]:
     if torch.cuda.is_available():
         inputs = {k: v.cuda() for k, v in inputs.items()}
     
-    # Get image features
     with torch.no_grad():
-        embeddings = model.get_image_features(**inputs)
-    
-    # Normalize embeddings (CLIP embeddings should be normalized for cosine similarity)
+        output = model.get_image_features(**inputs)
+        embeddings = output if isinstance(output, torch.Tensor) else output.pooler_output
+
     embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
-    
-    # Convert to list and return
     return embeddings[0].cpu().numpy().tolist()
 
 
@@ -79,14 +76,11 @@ def embed_text_clip(text: str) -> list[float]:
     if torch.cuda.is_available():
         inputs = {k: v.cuda() for k, v in inputs.items()}
     
-    # Get text features
     with torch.no_grad():
-        embeddings = model.get_text_features(**inputs)
-    
-    # Normalize embeddings (CLIP embeddings should be normalized for cosine similarity)
+        output = model.get_text_features(**inputs)
+        embeddings = output if isinstance(output, torch.Tensor) else output.pooler_output
+
     embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
-    
-    # Convert to list and return
     return embeddings[0].cpu().numpy().tolist()
 
 
